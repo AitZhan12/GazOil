@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: azs-backend
+  datasource:
+    url: jdbc:postgresql://localhost:5432/azs
+    username: azs
+    password: azs
+  jpa:
+    hibernate:
+      ddl-auto: validate          # схему держит Flyway, Hibernate только сверяет
+    open-in-view: false           # отключаем OSIV: ленивые связи грузим осознанно в сервисе
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080

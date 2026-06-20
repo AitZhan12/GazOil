@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: azs-db
+    environment:
+      POSTGRES_DB: azs
+      POSTGRES_USER: azs
+      POSTGRES_PASSWORD: azs
+    ports:
+      - "5432:5432"
+    volumes:
+      - azs-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U azs -d azs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  azs-pgdata:
