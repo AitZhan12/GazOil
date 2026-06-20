@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getOperators, getShiftById, addShift, updateShift, getSettings, getFuelPrice } from '../lib/storage';
+import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice } from '../lib/storage';
 import { calculateShiftFields, formatCurrency, formatLiters, formatNumber, salaryRateFor, bonusForLiters } from '../lib/calculations';
 import { getLastPumpReadings } from '../lib/shift-helpers';
 import { Shift, PumpReading, Operator, AppSettings, ShiftType, SHIFT_TYPE_LABELS } from '../types';
@@ -14,6 +14,24 @@ import { Shift, PumpReading, Operator, AppSettings, ShiftType, SHIFT_TYPE_LABELS
 function isoToRu(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
+// Удобный дефолт даты конца: ночь и сутки переходят через полночь — конец на след.
+// день; день закрывается в ту же дату. Это лишь подсказка, её можно поправить вручную.
+function endDateForType(type: ShiftType, isoStart: string): string {
+  if (!isoStart) return isoStart;
+  return type === 'night' || type === 'full' ? addDaysIso(isoStart, 1) : isoStart;
 }
 
 function maskRuDate(input: string): string {
@@ -52,6 +70,7 @@ export function ShiftForm() {
 
   const [operators, setOperators] = useState<Operator[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [allShifts, setAllShifts] = useState<Shift[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
 
@@ -116,10 +135,11 @@ export function ShiftForm() {
 
     async function load() {
       try {
-        const [ops, appSettings] = await Promise.all([getOperators(), getSettings()]);
+        const [ops, appSettings, shs] = await Promise.all([getOperators(), getSettings(), getShifts()]);
         if (cancelled) return;
         setOperators(ops.filter(op => op.active));
         setSettings(appSettings);
+        setAllShifts(shs);
 
         if (isEditing && id) {
           const shift = await getShiftById(id);
@@ -131,8 +151,10 @@ export function ShiftForm() {
           const today = now.toISOString().split('T')[0];
           setStartDate(today);
           setStartDateText(isoToRu(today));
-          setEndDate(today);
-          setEndDateText(isoToRu(today));
+          // Тип по умолчанию — «сутки», значит конец по умолчанию на след. день.
+          const endIso = endDateForType('full', today);
+          setEndDate(endIso);
+          setEndDateText(isoToRu(endIso));
           // Цены 107/112 для новой смены — из общих настроек (снапшот сделает бэк).
           const price = await getFuelPrice();
           if (cancelled) return;
@@ -191,6 +213,22 @@ export function ShiftForm() {
         .filter(m => Math.abs(m.entered - m.expected) > 0.005)
     : [];
 
+  // Контроль пересечения по времени: интервал [начало, конец] новой смены не
+  // должен накладываться на уже сохранённую (день до 20:10 → ночь с 19:50 нельзя).
+  // Касание встык (конец одной == начало другой) пересечением не считается.
+  const overlappingShift = (() => {
+    if (!startDate || !endDate || !isValidTime(startTime) || !isValidTime(endTime)) return null;
+    const ns = new Date(`${startDate}T${startTime}`).getTime();
+    const ne = new Date(`${endDate}T${endTime}`).getTime();
+    if (!(ne > ns)) return null;
+    return allShifts.find(s => {
+      if (s.id === id) return false; // саму редактируемую смену не сверяем
+      const ss = new Date(`${s.startDate}T${s.startTime}`).getTime();
+      const se = new Date(`${s.endDate}T${s.endTime}`).getTime();
+      return ns < se && ss < ne;
+    }) ?? null;
+  })();
+
   // Превью зарплаты за смену (бэк пересчитает при сохранении).
   const baseSalaryPreview = salaryRateFor(settings, shiftType);
   const bonusPreview = bonusForLiters(settings, calculated.totalLiters);
@@ -210,6 +248,7 @@ export function ShiftForm() {
     const startDateTime = new Date(`${startDate}T${startTime}`);
     const endDateTime = new Date(`${endDate}T${endTime}`);
     if (endDateTime <= startDateTime) newErrors.endTime = 'Время окончания должно быть позже времени начала';
+    if (overlappingShift) newErrors.overlap = 'Время смены пересекается с другой сменой';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -348,7 +387,18 @@ export function ShiftForm() {
                 <div>
                   <Label htmlFor="startDate" className="required text-slate-600" style={{ fontSize: '12px' }}>Дата начала</Label>
                   <Input id="startDate" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" value={startDateText}
-                    onChange={e => { const v = maskRuDate(e.target.value); setStartDateText(v); setStartDate(ruToIso(v)); }}
+                    onChange={e => {
+                      const v = maskRuDate(e.target.value);
+                      setStartDateText(v);
+                      const iso = ruToIso(v);
+                      setStartDate(iso);
+                      // Подсказка даты конца по типу смены (только для новой смены).
+                      if (!isEditing && iso) {
+                        const endIso = endDateForType(shiftType, iso);
+                        setEndDate(endIso);
+                        setEndDateText(isoToRu(endIso));
+                      }
+                    }}
                     className={`h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] mt-1 ${errors.startDate ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} />
                 </div>
                 <div>
@@ -361,7 +411,17 @@ export function ShiftForm() {
 
               <div>
                 <Label htmlFor="shiftType" className="required text-slate-600" style={{ fontSize: '12px' }}>Тип смены</Label>
-                <Select value={shiftType} onValueChange={v => setShiftType(v as ShiftType)}>
+                <Select value={shiftType} onValueChange={v => {
+                  const t = v as ShiftType;
+                  setShiftType(t);
+                  // Только для новой смены подсказываем дату конца по типу; при
+                  // редактировании сохранённые значения не трогаем.
+                  if (!isEditing && startDate) {
+                    const iso = endDateForType(t, startDate);
+                    setEndDate(iso);
+                    setEndDateText(isoToRu(iso));
+                  }
+                }}>
                   <SelectTrigger id="shiftType" className="h-8 border-[#d1d9e6] bg-[#f8fafc] mt-1" style={{ fontSize: '13px' }}>
                     <SelectValue />
                   </SelectTrigger>
@@ -392,6 +452,22 @@ export function ShiftForm() {
           </div>
         </div>
 
+        {/* Предупреждение о пересечении смен по времени (блокирует сохранение) */}
+        {overlappingShift && (
+          <div className="px-4 py-2.5 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
+            <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+            <span>
+              <strong>Пересечение по времени:</strong> интервал смены накладывается на уже
+              сохранённую смену{' '}
+              {operators.find(op => op.id === overlappingShift.operatorId)?.name
+                ? `(${operators.find(op => op.id === overlappingShift.operatorId)!.name}, `
+                : '('}
+              {isoToRu(overlappingShift.startDate)} {overlappingShift.startTime} – {isoToRu(overlappingShift.endDate)} {overlappingShift.endTime}).
+              Смены не должны пересекаться — проверьте дату и время.
+            </span>
+          </div>
+        )}
+
         {/* Блок Б — Показания колонок */}
         <div className={sectionClass}>
           <div className={sectionHeaderClass}>
@@ -399,7 +475,7 @@ export function ShiftForm() {
             <span className={sectionTitleClass} style={{ fontSize: '13px', fontWeight: 600 }}>Показания колонок</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse min-w-[640px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                   <th className="px-4 py-2.5 text-left text-slate-500 w-20 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Колонка</th>
@@ -420,11 +496,11 @@ export function ShiftForm() {
                     </td>
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
                       <Input type="number" step="0.01" value={pump.start} onChange={e => pump.setStart(e.target.value)}
-                        className={`h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
+                        className={`h-8 min-w-[150px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
                     </td>
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
                       <Input type="number" step="0.01" value={pump.end} onChange={e => pump.setEnd(e.target.value)}
-                        className={`h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
+                        className={`h-8 min-w-[150px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
                     </td>
                     <td className="px-4 py-2 bg-[#f8fafc]">
                       <span className="font-mono text-slate-900" style={{ fontSize: '13px', fontWeight: 500 }}>{formatLiters(pump.volume)}</span>

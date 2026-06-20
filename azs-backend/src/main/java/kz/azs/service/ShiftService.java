@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
@@ -93,8 +94,21 @@ public class ShiftService {
         shift.setAcceptedBy(dto.receivedById() != null && !dto.receivedById().isBlank()
                 ? operatorRef(dto.receivedById(), "Принявший смену")
                 : null);
-        shift.setStartedAt(toUtc(dto.startDate(), dto.startTime()));
-        shift.setEndedAt(toUtc(dto.endDate(), dto.endTime()));
+        OffsetDateTime shiftStart = toUtc(dto.startDate(), dto.startTime());
+        OffsetDateTime shiftEnd = toUtc(dto.endDate(), dto.endTime());
+        if (!shiftEnd.isAfter(shiftStart)) {
+            throw new IllegalArgumentException("Время окончания должно быть позже времени начала");
+        }
+        // Смены не должны накладываться по времени: интервал новой смены не может
+        // пересекать уже сохранённую (напр. день до 20:10, а ночь с 19:50 — запрещено).
+        List<Shift> overlaps = shifts.findOverlapping(shiftStart, shiftEnd, shift.getId());
+        if (!overlaps.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Время смены пересекается с другой сменой (" + formatRange(overlaps.get(0))
+                            + "). Смены не должны накладываться по времени.");
+        }
+        shift.setStartedAt(shiftStart);
+        shift.setEndedAt(shiftEnd);
         shift.setShiftType(normalizeShiftType(dto.shiftType()));
 
         if (dto.pumps() != null) {
@@ -156,6 +170,12 @@ public class ShiftService {
         return LocalDate.parse(date)
                 .atTime(LocalTime.parse(time))
                 .atOffset(ZoneOffset.UTC);
+    }
+
+    private static final DateTimeFormatter RANGE_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+
+    private static String formatRange(Shift s) {
+        return s.getStartedAt().format(RANGE_FMT) + "–" + s.getEndedAt().format(RANGE_FMT);
     }
 
     private static BigDecimal nz(BigDecimal v) {
