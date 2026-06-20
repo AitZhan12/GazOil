@@ -313,7 +313,7 @@ export function ShiftForm() {
             <span className={sectionTitleClass} style={{ fontSize: '13px', fontWeight: 600 }}>Шапка смены</span>
           </div>
           <div className={sectionBodyClass}>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="operator" className="required text-slate-600" style={{ fontSize: '12px' }}>Оператор</Label>
                 <Select value={operatorId} onValueChange={setOperatorId}>
@@ -372,7 +372,7 @@ export function ShiftForm() {
                   </SelectContent>
                 </Select>
               </div>
-              <div />
+              <div className="hidden lg:block" />
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="endDate" className="required text-slate-600" style={{ fontSize: '12px' }}>Дата конца</Label>

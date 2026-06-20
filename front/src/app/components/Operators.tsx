@@ -78,7 +78,7 @@ export function Operators() {
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Операторы</h1>
           <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>
@@ -92,7 +92,8 @@ export function Operators() {
       </div>
 
       <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full border-collapse min-w-[480px]">
           <thead>
             <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
               <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ФИО</th>
@@ -132,8 +133,9 @@ export function Operators() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
-      
+
       {/* Edit/Add Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>

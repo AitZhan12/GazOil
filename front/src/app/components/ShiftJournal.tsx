@@ -85,7 +85,7 @@ export function ShiftJournal() {
         <div className="px-4 py-2.5 text-slate-500" style={{ fontSize: '13px' }}>Загрузка…</div>
       )}
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Журнал смен</h1>
           <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>
@@ -101,11 +101,11 @@ export function ShiftJournal() {
       </div>
 
       {/* Filters bar */}
-      <div className="bg-white border border-[#d1d9e6] rounded-lg px-4 py-3 flex items-center gap-4">
+      <div className="bg-white border border-[#d1d9e6] rounded-lg px-4 py-3 flex items-center gap-3 sm:gap-4 flex-wrap">
         <span className="text-slate-500 shrink-0" style={{ fontSize: '12px' }}>Фильтр:</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-52 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }}>
+            <SelectTrigger className="h-8 w-full sm:w-52 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -118,7 +118,7 @@ export function ShiftJournal() {
           </Select>
 
           <Select value={selectedOperator} onValueChange={setSelectedOperator}>
-            <SelectTrigger className="h-8 w-56 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }}>
+            <SelectTrigger className="h-8 w-full sm:w-56 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -147,7 +147,8 @@ export function ShiftJournal() {
         </div>
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[640px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -247,6 +248,7 @@ export function ShiftJournal() {
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
       )}
     </div>

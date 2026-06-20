@@ -76,7 +76,7 @@ export function Settings() {
 
   const rateField = (id: string, label: string, value: number, onChange: (v: string) => void) => (
     <div className="flex items-center gap-3">
-      <Label htmlFor={id} className="text-slate-600 w-56 shrink-0" style={{ fontSize: '12px' }}>{label}</Label>
+      <Label htmlFor={id} className="text-slate-600 w-40 sm:w-56 shrink-0" style={{ fontSize: '12px' }}>{label}</Label>
       <Input id={id} type="number" step="0.01" value={value} onChange={e => onChange(e.target.value)}
         className="h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] flex-1" style={{ fontSize: '13px' }} />
     </div>
@@ -84,7 +84,7 @@ export function Settings() {
 
   return (
     <div className="space-y-4 w-full">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Настройки</h1>
         </div>
@@ -140,7 +140,8 @@ export function Settings() {
                 Ступень
               </Button>
             </div>
-            <table className="w-full border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[420px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                   <th className="px-5 py-2 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Планка объёма (л)</th>
@@ -172,6 +173,7 @@ export function Settings() {
                 )}
               </tbody>
             </table>
+            </div>
             <div className="px-5 py-3 border-t border-[#edf0f5] text-slate-400" style={{ fontSize: '11px' }}>
               Берётся высшая ступень, чью планку перешагнул объём смены. Ниже минимальной планки — бонуса нет.
             </div>
