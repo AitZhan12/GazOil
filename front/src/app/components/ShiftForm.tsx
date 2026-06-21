@@ -215,7 +215,8 @@ export function ShiftForm() {
 
   // Контроль пересечения по времени: интервал [начало, конец] новой смены не
   // должен накладываться на уже сохранённую (день до 20:10 → ночь с 19:50 нельзя).
-  // Касание встык (конец одной == начало другой) пересечением не считается.
+  // Касание встык (конец одной == начало другой) тоже считаем пересечением —
+  // нужно предупреждать, когда границы совпадают (20.02 == 20.02).
   const overlappingShift = (() => {
     if (!startDate || !endDate || !isValidTime(startTime) || !isValidTime(endTime)) return null;
     const ns = new Date(`${startDate}T${startTime}`).getTime();
@@ -225,7 +226,7 @@ export function ShiftForm() {
       if (s.id === id) return false; // саму редактируемую смену не сверяем
       const ss = new Date(`${s.startDate}T${s.startTime}`).getTime();
       const se = new Date(`${s.endDate}T${s.endTime}`).getTime();
-      return ns < se && ss < ne;
+      return ns <= se && ss <= ne;
     }) ?? null;
   })();
 
@@ -248,7 +249,7 @@ export function ShiftForm() {
     const startDateTime = new Date(`${startDate}T${startTime}`);
     const endDateTime = new Date(`${endDate}T${endTime}`);
     if (endDateTime <= startDateTime) newErrors.endTime = 'Время окончания должно быть позже времени начала';
-    if (overlappingShift) newErrors.overlap = 'Время смены пересекается с другой сменой';
+    // Пересечение по времени не блокирует сохранение — только красное предупреждение.
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -452,7 +453,7 @@ export function ShiftForm() {
           </div>
         </div>
 
-        {/* Предупреждение о пересечении смен по времени (блокирует сохранение) */}
+        {/* Предупреждение о пересечении смен по времени (не блокирует сохранение) */}
         {overlappingShift && (
           <div className="px-4 py-2.5 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
             <AlertTriangle className="size-4 shrink-0 mt-0.5" />
@@ -463,7 +464,7 @@ export function ShiftForm() {
                 ? `(${operators.find(op => op.id === overlappingShift.operatorId)!.name}, `
                 : '('}
               {isoToRu(overlappingShift.startDate)} {overlappingShift.startTime} – {isoToRu(overlappingShift.endDate)} {overlappingShift.endTime}).
-              Смены не должны пересекаться — проверьте дату и время.
+              Проверьте дату и время — сохранить всё равно можно.
             </span>
           </div>
         )}
