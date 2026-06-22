@@ -458,13 +458,11 @@ export function ShiftForm() {
           <div className="px-4 py-2.5 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
             <AlertTriangle className="size-4 shrink-0 mt-0.5" />
             <span>
-              <strong>Пересечение по времени:</strong> интервал смены накладывается на уже
-              сохранённую смену{' '}
+              <strong>Пересечение по времени</strong> со сменой{' '}
               {operators.find(op => op.id === overlappingShift.operatorId)?.name
                 ? `(${operators.find(op => op.id === overlappingShift.operatorId)!.name}, `
                 : '('}
               {isoToRu(overlappingShift.startDate)} {overlappingShift.startTime} – {isoToRu(overlappingShift.endDate)} {overlappingShift.endTime}).
-              Проверьте дату и время — сохранить всё равно можно.
             </span>
           </div>
         )}

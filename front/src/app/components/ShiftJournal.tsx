@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Plus, Pencil, Trash2, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Layers, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { getShifts, getOperators, deleteShift } from '../lib/storage';
@@ -51,9 +51,26 @@ export function ShiftJournal() {
       const matchesOperator = selectedOperator === 'all' || shift.operatorId === selectedOperator;
       return matchesMonth && matchesOperator;
     }).sort((a, b) => {
-      return `${b.startDate} ${b.startTime}`.localeCompare(`${a.startDate} ${a.startTime}`);
+      return `${a.startDate} ${a.startTime}`.localeCompare(`${b.startDate} ${b.startTime}`);
     });
   }, [shifts, selectedMonth, selectedOperator]);
+
+  // Id смен, участвующих хотя бы в одном пересечении по времени — те же правила,
+  // что и в форме (касание встык тоже считаем пересечением). Для отметки в строке.
+  const overlapIds = useMemo(() => {
+    const ms = (d: string, t: string) => new Date(`${d}T${t}`).getTime();
+    const ids = new Set<string>();
+    for (let i = 0; i < filteredShifts.length; i++) {
+      for (let j = i + 1; j < filteredShifts.length; j++) {
+        const a = filteredShifts[i], b = filteredShifts[j];
+        const as = ms(a.startDate, a.startTime), ae = ms(a.endDate, a.endTime);
+        const bs = ms(b.startDate, b.startTime), be = ms(b.endDate, b.endTime);
+        if (!(ae > as) || !(be > bs)) continue;
+        if (as <= be && bs <= ae) { ids.add(a.id); ids.add(b.id); }
+      }
+    }
+    return ids;
+  }, [filteredShifts]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Удалить смену?')) return;
@@ -190,6 +207,16 @@ export function ShiftJournal() {
                     {shift.shiftType && (
                       <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" style={{ fontSize: '10px', fontWeight: 600 }}>
                         {SHIFT_TYPE_LABELS[shift.shiftType]}
+                      </span>
+                    )}
+                    {overlapIds.has(shift.id) && (
+                      <span
+                        className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 align-middle"
+                        style={{ fontSize: '10px', fontWeight: 600 }}
+                        title="Пересечение по времени с другой сменой"
+                      >
+                        <AlertTriangle className="size-3" />
+                        Пересечение
                       </span>
                     )}
                   </td>
