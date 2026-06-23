@@ -5,13 +5,17 @@ kz/azs/web/OperatorController.class
 kz/azs/web/FuelPriceController.class
 kz/azs/service/OperatorService.class
 kz/azs/domain/ShiftBreakdown.class
+kz/azs/web/GasDeliveryController.class
 kz/azs/service/SalaryCalculator.class
 kz/azs/web/dto/SettingsDto.class
 kz/azs/repo/StationRepository.class
+kz/azs/web/dto/GasDeliveryDto.class
 kz/azs/repo/ShiftRepository.class
 kz/azs/web/ShiftController.class
 kz/azs/service/SettingsService.class
+kz/azs/domain/GasDelivery.class
 kz/azs/domain/Operator.class
+kz/azs/repo/GasDeliveryRepository.class
 kz/azs/web/dto/OperatorDto.class
 kz/azs/config/WebConfig.class
 kz/azs/AzsApplication.class
@@ -21,6 +25,7 @@ kz/azs/repo/FuelPriceRepository.class
 kz/azs/web/dto/BonusTierDto.class
 kz/azs/service/ShiftCalculator$ShiftResult.class
 kz/azs/domain/SalaryConfig.class
+kz/azs/service/GasDeliveryService.class
 kz/azs/domain/BonusTier.class
 kz/azs/web/SettingsController.class
 kz/azs/repo/SalaryConfigRepository.class

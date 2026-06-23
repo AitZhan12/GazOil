@@ -1,4 +1,4 @@
-import { AppSettings, FuelPrice, Operator, Shift } from '../types';
+import { AppSettings, FuelPrice, GasDelivery, Operator, Shift } from '../types';
 
 // База API бэка (Spring Boot). Можно переопределить через VITE_API_URL.
 const API_BASE: string =
@@ -85,6 +85,30 @@ export function updateSettings(settings: AppSettings): Promise<AppSettings> {
     method: 'PUT',
     body: JSON.stringify(settings),
   });
+}
+
+// ---- Приход газа (поставки) ----
+
+export function getDeliveries(): Promise<GasDelivery[]> {
+  return http<GasDelivery[]>('/deliveries');
+}
+
+export function addDelivery(delivery: Omit<GasDelivery, 'id'>): Promise<GasDelivery> {
+  return http<GasDelivery>('/deliveries', {
+    method: 'POST',
+    body: JSON.stringify(delivery),
+  });
+}
+
+export function updateDelivery(id: string, delivery: GasDelivery): Promise<GasDelivery> {
+  return http<GasDelivery>(`/deliveries/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(delivery),
+  });
+}
+
+export function deleteDelivery(id: string): Promise<void> {
+  return http<void>(`/deliveries/${id}`, { method: 'DELETE' });
 }
 
 // ---- Цены 107/112 (снапшотятся в смену при создании) ----

@@ -52,6 +52,8 @@ public class SettingsService {
         config.setRateNight(nz(dto.rateNight()));
         config.setDefaultDiscountPrice(nz(dto.defaultDiscountPrice()));
         config.setDefaultBasePrice(nz(dto.defaultBasePrice()));
+        config.setInitialStockLiters(nz(dto.initialStockLiters()));
+        config.setTankCapacityLiters(nz(dto.tankCapacityLiters()));
 
         // Полная замена таблицы ступеней. Чистим и сбрасываем в БД до вставки,
         // иначе новые строки упрутся в unique (config_id, threshold_liters).
@@ -79,7 +81,8 @@ public class SettingsService {
                 .toList();
         return new SettingsDto(
                 c.getRateFull(), c.getRateDay(), c.getRateNight(),
-                c.getDefaultDiscountPrice(), c.getDefaultBasePrice(), tiers);
+                c.getDefaultDiscountPrice(), c.getDefaultBasePrice(),
+                c.getInitialStockLiters(), c.getTankCapacityLiters(), tiers);
     }
 
     private Station defaultStation() {

@@ -131,6 +131,20 @@ export function Settings() {
             </div>
           </div>
 
+          {/* Учёт остатка газа */}
+          <div className={cardClass}>
+            <div className={headerClass}>
+              <span className="text-slate-700" style={{ fontSize: '13px', fontWeight: 600 }}>Учёт остатка газа (л)</span>
+            </div>
+            <div className={`${bodyClass} space-y-2.5`}>
+              {rateField('initialStockLiters', 'Начальный остаток', settings.initialStockLiters, v => patch({ initialStockLiters: num(v) }))}
+              {rateField('tankCapacityLiters', 'Объём резервуара', settings.tankCapacityLiters, v => patch({ tankCapacityLiters: num(v) }))}
+              <p className="text-slate-400" style={{ fontSize: '11px' }}>
+                Бегущий остаток = начальный остаток + приход − реализация смен (по времени). Объём резервуара = 0 — контроль перелива выключен. Приход вносится в разделе «Приход газа».
+              </p>
+            </div>
+          </div>
+
           {/* Таблица бонусов */}
           <div className={cardClass}>
             <div className={`${headerClass} flex items-center justify-between`}>

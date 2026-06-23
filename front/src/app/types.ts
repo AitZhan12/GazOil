@@ -75,7 +75,19 @@ export interface AppSettings {
   rateNight: number;
   defaultDiscountPrice: number;
   defaultBasePrice: number;
+  initialStockLiters: number;   // начальный остаток газа в резервуаре
+  tankCapacityLiters: number;   // объём резервуара (0 = без контроля перелива)
   bonusTiers: BonusTier[];
+}
+
+// Приход газа (поставка в резервуар).
+export interface GasDelivery {
+  id: string;
+  date: string;        // ISO ГГГГ-ММ-ДД
+  time: string;        // ЧЧ:ММ
+  liters: number;
+  supplier?: string;
+  note?: string;
 }
 
 export interface MonthlyOperatorStats {

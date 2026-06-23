@@ -40,6 +40,14 @@ public class SalaryConfig {
     @Column(name = "default_base_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal defaultBasePrice = BigDecimal.ZERO;
 
+    /** Остаток газа в резервуаре на старте учёта — точка отсчёта бегущего остатка. */
+    @Column(name = "initial_stock_liters", nullable = false, precision = 14, scale = 2)
+    private BigDecimal initialStockLiters = BigDecimal.ZERO;
+
+    /** Объём резервуара (0 = контроль перелива выключен). */
+    @Column(name = "tank_capacity_liters", nullable = false, precision = 14, scale = 2)
+    private BigDecimal tankCapacityLiters = BigDecimal.ZERO;
+
     @OneToMany(mappedBy = "config", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("thresholdLiters asc")
     private List<BonusTier> tiers = new ArrayList<>();

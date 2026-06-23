@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Save, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, AlertTriangle, Fuel } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice } from '../lib/storage';
+import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries } from '../lib/storage';
 import { calculateShiftFields, formatCurrency, formatLiters, formatNumber, salaryRateFor, bonusForLiters } from '../lib/calculations';
 import { getLastPumpReadings } from '../lib/shift-helpers';
-import { Shift, PumpReading, Operator, AppSettings, ShiftType, SHIFT_TYPE_LABELS } from '../types';
+import { balanceAroundShift } from '../lib/inventory';
+import { Shift, PumpReading, Operator, AppSettings, GasDelivery, ShiftType, SHIFT_TYPE_LABELS } from '../types';
 
 // Формат СНГ: дата вводится как ДД.ММ.ГГГГ, а внутри храним ISO (ГГГГ-ММ-ДД).
 function isoToRu(iso: string): string {
@@ -71,6 +72,7 @@ export function ShiftForm() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [allShifts, setAllShifts] = useState<Shift[]>([]);
+  const [deliveries, setDeliveries] = useState<GasDelivery[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
 
@@ -135,11 +137,12 @@ export function ShiftForm() {
 
     async function load() {
       try {
-        const [ops, appSettings, shs] = await Promise.all([getOperators(), getSettings(), getShifts()]);
+        const [ops, appSettings, shs, dels] = await Promise.all([getOperators(), getSettings(), getShifts(), getDeliveries()]);
         if (cancelled) return;
         setOperators(ops.filter(op => op.active));
         setSettings(appSettings);
         setAllShifts(shs);
+        setDeliveries(dels);
 
         if (isEditing && id) {
           const shift = await getShiftById(id);
@@ -228,6 +231,21 @@ export function ShiftForm() {
       const se = new Date(`${s.endDate}T${s.endTime}`).getTime();
       return ns <= se && ss <= ne;
     }) ?? null;
+  })();
+
+  // Контроль остатка газа: остаток до/после этой смены (нач. остаток + приход −
+  // реализация прочих смен до конца этой). Краснеет, если уходит в минус.
+  const stock = (() => {
+    if (!settings || !endDate || !isValidTime(endTime)) return null;
+    const shiftEnd = new Date(`${endDate}T${endTime}`).getTime();
+    if (Number.isNaN(shiftEnd)) return null;
+    return balanceAroundShift({
+      initialStock: settings.initialStockLiters ?? 0,
+      deliveries,
+      otherShifts: allShifts.filter(s => s.id !== id),
+      shiftEnd,
+      shiftLiters: calculated.totalLiters,
+    });
   })();
 
   // Превью зарплаты за смену (бэк пересчитает при сохранении).
@@ -537,6 +555,34 @@ export function ShiftForm() {
             </div>
           )}
         </div>
+
+        {/* Контроль остатка газа в резервуаре */}
+        {stock && (
+          <div className={`rounded-lg border p-3 flex items-center gap-4 flex-wrap ${stock.after < 0 ? 'bg-red-50 border-red-200' : 'bg-white border-[#d1d9e6]'}`}>
+            <div className="flex items-center gap-2 shrink-0">
+              <Fuel className={`size-4 ${stock.after < 0 ? 'text-red-600' : 'text-blue-600'}`} />
+              <span className="text-slate-600" style={{ fontSize: '12px', fontWeight: 600 }}>Остаток газа</span>
+            </div>
+            <div className="flex items-center gap-1.5" style={{ fontSize: '12px' }}>
+              <span className="text-slate-500">до смены</span>
+              <span className="font-mono text-slate-800">{formatLiters(stock.before)}</span>
+            </div>
+            <div className="flex items-center gap-1.5" style={{ fontSize: '12px' }}>
+              <span className="text-slate-500">− реализация</span>
+              <span className="font-mono text-slate-800">{formatLiters(calculated.totalLiters)}</span>
+            </div>
+            <div className="flex items-center gap-1.5" style={{ fontSize: '12px' }}>
+              <span className="text-slate-500">= после</span>
+              <span className={`font-mono ${stock.after < 0 ? 'text-red-700' : 'text-slate-900'}`} style={{ fontWeight: 700 }}>{formatLiters(stock.after)}</span>
+            </div>
+            {stock.after < 0 && (
+              <span className="flex items-center gap-1.5 text-red-700 w-full" style={{ fontSize: '12px' }}>
+                <AlertTriangle className="size-3.5 shrink-0" />
+                Реализация превышает остаток в резервуаре — проверьте приход газа. Сохранить всё равно можно.
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Блок В — «ИЗ НИХ» (строки точно как на бумажном листе) */}
         <div className={sectionClass}>
