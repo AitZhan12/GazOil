@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router';
-import { FileText, BarChart3, Users, Settings as SettingsIcon, Fuel, Droplet, LogOut, Menu, X } from 'lucide-react';
+import { FileText, BarChart3, LayoutDashboard, Users, Settings as SettingsIcon, Fuel, Droplet, LogOut, Menu, X } from 'lucide-react';
 import { isAuthed, logout } from '../lib/auth';
 
 export function Root() {
@@ -27,6 +27,7 @@ export function Root() {
   };
 
   const navLinks = [
+    { path: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
     { path: '/', label: 'Журнал смен', icon: FileText },
     { path: '/report', label: 'Месячный отчёт', icon: BarChart3 },
     { path: '/deliveries', label: 'Приход газа', icon: Droplet },

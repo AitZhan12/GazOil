@@ -16,6 +16,7 @@ export const router = createBrowserRouter([
     Component: Root,
     children: [
       { index: true, Component: ShiftJournal },
+      { path: "dashboard", lazy: async () => ({ Component: (await import("./components/Dashboard")).Dashboard }) },
       { path: "shift/new", Component: ShiftForm },
       { path: "shift/:id", Component: ShiftForm },
       { path: "report", Component: MonthlyReport },

@@ -151,7 +151,6 @@ export function MonthlyReport() {
         'Тип смены',
         'Реализация (л)',
         'Талоны (л)',
-        'Выручка (₸)',
         'ЗП база (₸)',
         'Бонус (₸)',
         'К выплате (₸)',
@@ -161,7 +160,6 @@ export function MonthlyReport() {
         SHIFT_TYPE_LABELS[s.shiftType],
         s.totalLiters.toFixed(2),
         s.voucherLiters.toFixed(2),
-        s.totalRevenue.toFixed(0),
         (s.baseSalary ?? 0).toFixed(0),
         (s.bonus ?? 0).toFixed(0),
         ((s.baseSalary ?? 0) + (s.bonus ?? 0)).toFixed(0),
@@ -171,7 +169,6 @@ export function MonthlyReport() {
         `${selectedStat?.shiftsCount ?? operatorShifts.length} смен`,
         (selectedStat?.totalLiters ?? 0).toFixed(2),
         (selectedStat?.voucherLiters ?? 0).toFixed(2),
-        (selectedStat?.totalRevenue ?? 0).toFixed(0),
         (selectedStat?.baseSalary ?? 0).toFixed(0),
         (selectedStat?.bonus ?? 0).toFixed(0),
         (selectedStat?.totalPayout ?? 0).toFixed(0),
@@ -186,7 +183,6 @@ export function MonthlyReport() {
       'Смен',
       'Литров продано',
       'Талонов (л)',
-      'Выручка (₸)',
       'ЗП база (₸)',
       'Бонус (₸)',
       'Итого к выплате (₸)',
@@ -196,7 +192,6 @@ export function MonthlyReport() {
       stat.shiftsCount,
       stat.totalLiters.toFixed(2),
       stat.voucherLiters.toFixed(2),
-      stat.totalRevenue.toFixed(0),
       stat.baseSalary.toFixed(0),
       stat.bonus.toFixed(0),
       stat.totalPayout.toFixed(0),
@@ -206,7 +201,6 @@ export function MonthlyReport() {
       totals.shiftsCount,
       totals.totalLiters.toFixed(2),
       totals.voucherLiters.toFixed(2),
-      totals.totalRevenue.toFixed(0),
       totals.baseSalary.toFixed(0),
       totals.bonus.toFixed(0),
       totals.totalPayout.toFixed(0),
@@ -298,7 +292,6 @@ export function MonthlyReport() {
                   <th className={`${thCell} text-left`} style={thStyle}>Тип</th>
                   <th className={`${thCell} text-right`} style={thStyle}>Реализ. (л)</th>
                   <th className={`${thCell} text-right`} style={thStyle}>Талоны (л)</th>
-                  <th className={`${thCell} text-right`} style={thStyle}>Выручка</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>ЗП база</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>Бонус</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>К выплате</th>
@@ -313,7 +306,6 @@ export function MonthlyReport() {
                       <td className="px-4 py-2.5 text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>{SHIFT_TYPE_LABELS[s.shiftType]}</td>
                       <td className={tdNum} style={{ fontSize: '13px' }}>{formatLiters(s.totalLiters)}</td>
                       <td className={tdNum} style={{ fontSize: '13px' }}>{formatLiters(s.voucherLiters)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>{formatCurrency(s.totalRevenue)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(s.baseSalary ?? 0)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(s.bonus ?? 0)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-blue-800 bg-blue-50/40" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(payout)}</td>
@@ -326,7 +318,6 @@ export function MonthlyReport() {
                   <td className="px-4 py-2.5 text-slate-600 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }} colSpan={2}>ИТОГО</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatLiters(selectedStat?.totalLiters ?? 0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatLiters(selectedStat?.voucherLiters ?? 0)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(selectedStat?.totalRevenue ?? 0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(selectedStat?.baseSalary ?? 0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(selectedStat?.bonus ?? 0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-blue-900 bg-blue-100/60" style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(selectedStat?.totalPayout ?? 0)}</td>
@@ -346,7 +337,6 @@ export function MonthlyReport() {
                   <th className={`${thCell} text-right`} style={thStyle}>Смен</th>
                   <th className={`${thCell} text-right`} style={thStyle}>Реализ. (л)</th>
                   <th className={`${thCell} text-right`} style={thStyle}>Талоны (л)</th>
-                  <th className={`${thCell} text-right`} style={thStyle}>Выручка</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>ЗП база</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>Бонус</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>К выплате</th>
@@ -363,7 +353,6 @@ export function MonthlyReport() {
                     <td className={tdNum} style={{ fontSize: '13px' }}>{stat.shiftsCount}</td>
                     <td className={tdNum} style={{ fontSize: '13px' }}>{formatLiters(stat.totalLiters)}</td>
                     <td className={tdNum} style={{ fontSize: '13px' }}>{formatLiters(stat.voucherLiters)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>{formatCurrency(stat.totalRevenue)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(stat.baseSalary)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(stat.bonus)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-blue-800 bg-blue-50/40" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(stat.totalPayout)}</td>
@@ -376,7 +365,6 @@ export function MonthlyReport() {
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{totals.shiftsCount}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatLiters(totals.totalLiters)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatLiters(totals.voucherLiters)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(totals.totalRevenue)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(totals.baseSalary)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(totals.bonus)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-blue-900 bg-blue-100/60" style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(totals.totalPayout)}</td>
