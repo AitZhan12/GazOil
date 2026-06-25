@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, getSettings, getTankResets, addTankReset, deleteTankReset } from '../lib/storage';
 import { formatLiters, formatNumber } from '../lib/calculations';
-import { buildInventoryTimeline, reconcileResets } from '../lib/inventory';
+import { buildInventoryTimeline, reconcileResets, reconcileResetDetail } from '../lib/inventory';
 import { AppSettings, GasDelivery, Shift, TankReset } from '../types';
 
 // Дата ДД.ММ.ГГГГ ↔ ISO, время ЧЧ:ММ — те же маски, что и в форме смены.
@@ -65,6 +65,9 @@ export function Deliveries() {
   const [resetTime, setResetTime] = useState('');
   const [resetNote, setResetNote] = useState('');
   const [resetPumps, setResetPumps] = useState<string[]>(['', '', '']); // показания колонок 1,2,3
+
+  // Разбор сверки конкретного обнуления.
+  const [detailReset, setDetailReset] = useState<TankReset | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +138,10 @@ export function Deliveries() {
       .map(r => ({ reset: r, recon: reconByReset.get(r.id) }))
       .filter(x => x.recon && !x.recon.withinTolerance),
     [sortedResets, reconByReset],
+  );
+  const detail = useMemo(
+    () => (detailReset ? reconcileResetDetail(detailReset.id, resets, shifts) : null),
+    [detailReset, resets, shifts],
   );
 
   const openDialog = (d?: GasDelivery) => {
@@ -455,14 +462,14 @@ export function Deliveries() {
                       </td>
                       <td className="px-4 py-2.5 text-right border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                         {recon ? (
-                          <div>
+                          <button type="button" onClick={() => setDetailReset(r)} className="text-right hover:opacity-70 transition-opacity" title="Открыть разбор сверки">
                             <div className={`font-mono ${recon.withinTolerance ? 'text-slate-500' : 'text-red-600'}`} style={{ fontWeight: recon.withinTolerance ? 400 : 600 }}>
                               {recon.diff > 0 ? '+' : ''}{formatLiters(recon.diff)}
                             </div>
-                            <div className="text-slate-400" style={{ fontSize: '10px' }}>
-                              колонки {formatNumber(recon.physicalDispensed, 0)} · смены {formatNumber(recon.recordedSold, 0)}
+                            <div className="text-blue-500 underline" style={{ fontSize: '10px' }}>
+                              колонки {formatNumber(recon.physicalDispensed, 0)} · смены {formatNumber(recon.recordedSold, 0)} · разбор
                             </div>
-                          </div>
+                          </button>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -584,6 +591,89 @@ export function Deliveries() {
             </Button>
             <Button onClick={handleResetSave} disabled={resetSaving} className="h-8 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60" style={{ fontSize: '13px' }}>
               {resetSaving ? 'Обнуление…' : 'Обнулить'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Разбор сверки обнуления */}
+      <Dialog open={!!detailReset} onOpenChange={(o) => { if (!o) setDetailReset(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: '15px', fontWeight: 600 }}>
+              Разбор сверки {detailReset && <span className="font-mono text-slate-500" style={{ fontSize: '13px' }}>· {isoToRu(detailReset.date)} {detailReset.time}</span>}
+            </DialogTitle>
+          </DialogHeader>
+
+          {detail ? (
+            <div className="space-y-3 py-2">
+              {/* Итог */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg border border-[#d1d9e6] bg-[#f8fafc] p-2.5">
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Через колонки</div>
+                  <div className="font-mono text-slate-900" style={{ fontSize: '15px', fontWeight: 700 }}>{formatLiters(detail.physicalDispensed)}</div>
+                </div>
+                <div className="rounded-lg border border-[#d1d9e6] bg-[#f8fafc] p-2.5">
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>По сменам</div>
+                  <div className="font-mono text-slate-900" style={{ fontSize: '15px', fontWeight: 700 }}>{formatLiters(detail.totalShiftLiters)}</div>
+                </div>
+                <div className={`rounded-lg border p-2.5 ${Math.abs(detail.diff) > tolerance ? 'border-red-200 bg-red-50' : 'border-[#d1d9e6] bg-[#f8fafc]'}`}>
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Расхождение</div>
+                  <div className={`font-mono ${Math.abs(detail.diff) > tolerance ? 'text-red-700' : 'text-slate-900'}`} style={{ fontSize: '15px', fontWeight: 700 }}>{detail.diff > 0 ? '+' : ''}{formatLiters(detail.diff)}</div>
+                </div>
+              </div>
+
+              <p className="text-slate-500" style={{ fontSize: '11px' }}>
+                База: {detail.baselineLabel}. Расхождение = сумма зазоров на стыках смен + хвост после последней смены.
+                Внутри смены литры = конец−начало по показаниям, поэтому незаписанный газ виден только на стыках (колонка «Зазор перед»).
+              </p>
+
+              <div className="border border-[#d1d9e6] rounded-lg overflow-hidden">
+                <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+                  <table className="w-full border-collapse min-w-[480px]">
+                    <thead className="sticky top-0">
+                      <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
+                        <th className="px-3 py-2 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Звено</th>
+                        <th className="px-3 py-2 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Дата / Время</th>
+                        <th className="px-3 py-2 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Зазор перед (л)</th>
+                        <th className="px-3 py-2 text-right text-slate-500" style={{ fontSize: '11px', fontWeight: 600 }}>Записано (л)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.rows.map((row, i) => {
+                        const gapFlag = Math.abs(row.gapBefore) >= 1;
+                        return (
+                          <tr key={i} className={`border-b border-[#edf0f5] last:border-b-0 ${row.kind === 'tail' ? 'bg-[#f8fafc]' : ''}`}>
+                            <td className="px-3 py-2 text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '12px' }}>
+                              {row.kind === 'tail' ? 'Хвост до обнуления' : 'Смена'}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '12px' }}>
+                              {isoToRu(row.date)} {row.time}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono border-r border-[#edf0f5] ${gapFlag ? 'text-amber-700' : 'text-slate-300'}`} style={{ fontSize: '12px', fontWeight: gapFlag ? 600 : 400 }}>
+                              {gapFlag ? `${row.gapBefore > 0 ? '+' : ''}${formatLiters(row.gapBefore)}` : '0'}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-700" style={{ fontSize: '12px' }}>
+                              {row.kind === 'tail' ? '—' : formatLiters(row.liters)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <p className="text-slate-400" style={{ fontSize: '11px' }}>
+                Жёлтым — стыки, где через колонки прошло больше (или меньше), чем записано в смене. Большой «хвост» = обнуление сделали сильно позже последней смены.
+              </p>
+            </div>
+          ) : (
+            <div className="py-6 text-center text-slate-400" style={{ fontSize: '13px' }}>Нет данных для разбора (нет показаний или базы для сверки).</div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailReset(null)} className="h-8 border-[#d1d9e6] text-slate-600" style={{ fontSize: '13px' }}>
+              Закрыть
             </Button>
           </DialogFooter>
         </DialogContent>

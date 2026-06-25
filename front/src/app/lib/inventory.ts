@@ -173,6 +173,103 @@ export function reconcileResets(
   return result;
 }
 
+/** Звено разбора сверки: смена или «хвост» после последней смены до обнуления. */
+export interface ResetDetailRow {
+  kind: 'shift' | 'tail';
+  date: string;
+  time: string;
+  liters: number;   // для смены — записанные литры; для хвоста — 0
+  gapBefore: number; // незаписанные литры на стыке перед этим звеном (Σ колонок)
+}
+
+export interface ResetDetail {
+  baselineLabel: string;     // откуда считается база
+  rows: ResetDetailRow[];    // смены интервала по времени + хвост последним
+  totalShiftLiters: number;  // Σ записанных литров смен
+  physicalDispensed: number; // Σ (показание − база) по колонкам
+  diff: number;              // physicalDispensed − totalShiftLiters (= Σ зазоров + хвост)
+}
+
+/**
+ * Разбор сверки одного обнуления: раскладывает расхождение на зазоры между сменами
+ * (начало смены − конец предыдущей) и хвост (показания обнуления − конец последней смены).
+ * Внутри смены литры = конец−начало по определению, поэтому незаписанный газ виден только
+ * на стыках. Возвращает null, если у обнуления нет показаний или базы для сверки.
+ */
+export function reconcileResetDetail(
+  resetId: string,
+  resets: TankReset[],
+  shifts: Shift[],
+): ResetDetail | null {
+  const sorted = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
+  const idx = sorted.findIndex(r => r.id === resetId);
+  if (idx < 0) return null;
+  const reset = sorted[idx];
+  const readings = reset.pumpReadings ?? [];
+  if (readings.length === 0) return null;
+  const at = ts(reset.date, reset.time);
+  const pumpNums = readings.map((_, i) => i + 1);
+
+  // База: предыдущее обнуление с показаниями, иначе старт самой ранней смены.
+  const prev = sorted[idx - 1];
+  let baseAt: number;
+  let baseReadingFor: (pump: number) => number | null;
+  let baselineLabel: string;
+  if (prev && (prev.pumpReadings?.length ?? 0) > 0) {
+    baseAt = ts(prev.date, prev.time);
+    baseReadingFor = (p) => prev.pumpReadings[p - 1] ?? null;
+    baselineLabel = `Прошлое обнуление — ${prev.date} ${prev.time}`;
+  } else {
+    const firstShift = [...shifts].sort(
+      (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
+    if (!firstShift) return null;
+    baseAt = ts(firstShift.startDate, firstShift.startTime);
+    baseReadingFor = (p) => firstShift.pumps.find(x => x.pumpNumber === p)?.start ?? null;
+    baselineLabel = `Старт первой смены — ${firstShift.startDate} ${firstShift.startTime}`;
+  }
+
+  let baseOk = true;
+  const baseSum = pumpNums.reduce((sum, p) => {
+    const v = baseReadingFor(p);
+    if (v === null) baseOk = false;
+    return sum + (v ?? 0);
+  }, 0);
+  if (!baseOk) return null;
+
+  const resetSum = pumpNums.reduce((sum, p) => sum + (readings[p - 1] ?? 0), 0);
+  const startSum = (s: Shift) => pumpNums.reduce((sum, p) => sum + (s.pumps.find(x => x.pumpNumber === p)?.start ?? 0), 0);
+  const endSum = (s: Shift) => pumpNums.reduce((sum, p) => sum + (s.pumps.find(x => x.pumpNumber === p)?.end ?? 0), 0);
+
+  const inInterval = shifts
+    .filter(s => { const e = ts(s.endDate, s.endTime); return e > baseAt && e <= at; })
+    .sort((a, b) => ts(a.endDate, a.endTime) - ts(b.endDate, b.endTime));
+
+  const rows: ResetDetailRow[] = [];
+  let prevEnd = baseSum;
+  let totalShiftLiters = 0;
+  for (const s of inInterval) {
+    rows.push({
+      kind: 'shift', date: s.endDate, time: s.endTime,
+      liters: round2(s.totalLiters), gapBefore: round2(startSum(s) - prevEnd),
+    });
+    prevEnd = endSum(s);
+    totalShiftLiters += s.totalLiters;
+  }
+  rows.push({
+    kind: 'tail', date: reset.date, time: reset.time,
+    liters: 0, gapBefore: round2(resetSum - prevEnd),
+  });
+
+  const physicalDispensed = round2(resetSum - baseSum);
+  return {
+    baselineLabel,
+    rows,
+    totalShiftLiters: round2(totalShiftLiters),
+    physicalDispensed,
+    diff: round2(physicalDispensed - totalShiftLiters),
+  };
+}
+
 /**
  * Остаток до и после конкретной смены — для контроля прямо в форме.
  * `shifts` — все прочие смены (без редактируемой). Приход, чужие смены и обнуления,
