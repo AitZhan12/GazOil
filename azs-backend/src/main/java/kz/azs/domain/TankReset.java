@@ -7,6 +7,8 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Обнуление резервуара: момент, когда остаток газа сброшен в ноль (газ закончился).
@@ -31,7 +33,18 @@ public class TankReset {
     @Column(name = "note")
     private String note;
 
+    /** Показания счётчиков колонок на момент обнуления. */
+    @OneToMany(mappedBy = "tankReset", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("pumpNumber asc")
+    private List<TankResetReading> readings = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    /** Держит обе стороны связи в синхроне. */
+    public void addReading(TankResetReading r) {
+        readings.add(r);
+        r.setTankReset(this);
+    }
 }

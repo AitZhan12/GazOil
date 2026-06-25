@@ -100,6 +100,79 @@ export function buildInventoryTimeline(
   };
 }
 
+/** Сверка обнуления: физически прошло через колонки vs записано продано по сменам. */
+export interface ResetReconciliation {
+  physicalDispensed: number; // Σ (показание − база) по колонкам — прошло через счётчики
+  recordedSold: number;      // Σ литров смен за интервал
+  diff: number;              // physicalDispensed − recordedSold (минус = продали меньше, чем прошло)
+  withinTolerance: boolean;  // |diff| ≤ погрешности
+}
+
+/**
+ * Сверяет каждое обнуление: разница показаний колонок с прошлой базой = сколько газа
+ * физически прошло через счётчики; сравнивается с суммой литров смен за тот же интервал.
+ * База — предыдущее обнуление с показаниями, а для самого первого — стартовые показания
+ * самой ранней смены. Обнуления без показаний (или без базы) в результат не попадают.
+ */
+export function reconcileResets(
+  resets: TankReset[],
+  shifts: Shift[],
+  tolerance = 0,
+): Map<string, ResetReconciliation> {
+  const result = new Map<string, ResetReconciliation>();
+  const sorted = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
+
+  // Самая ранняя смена — её стартовые показания служат базой для первого обнуления.
+  const firstShift = [...shifts].sort(
+    (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
+
+  sorted.forEach((reset, i) => {
+    const readings = reset.pumpReadings ?? [];
+    if (readings.length === 0) return; // нечего сверять
+    const at = ts(reset.date, reset.time);
+
+    const prev = sorted[i - 1];
+    let baseAt: number;
+    let baseReadingFor: (pump: number) => number | null;
+
+    if (prev && (prev.pumpReadings?.length ?? 0) > 0) {
+      baseAt = ts(prev.date, prev.time);
+      baseReadingFor = (pump) => prev.pumpReadings[pump - 1] ?? null;
+    } else if (!prev && firstShift) {
+      baseAt = ts(firstShift.startDate, firstShift.startTime);
+      baseReadingFor = (pump) => firstShift.pumps.find(p => p.pumpNumber === pump)?.start ?? null;
+    } else {
+      return; // нет базы для сверки
+    }
+
+    // Физически прошло через колонки = Σ (показание − база) по колонкам.
+    let physical = 0;
+    let baselineOk = true;
+    readings.forEach((val, idx) => {
+      const base = baseReadingFor(idx + 1);
+      if (base === null) { baselineOk = false; return; }
+      physical += val - base;
+    });
+    if (!baselineOk) return;
+
+    // Записано продано = Σ литров смен, закончившихся в интервале (baseAt, at].
+    const recorded = shifts.reduce((sum, s) => {
+      const e = ts(s.endDate, s.endTime);
+      return e > baseAt && e <= at ? sum + s.totalLiters : sum;
+    }, 0);
+
+    const diff = round2(physical - recorded);
+    result.set(reset.id, {
+      physicalDispensed: round2(physical),
+      recordedSold: round2(recorded),
+      diff,
+      withinTolerance: Math.abs(diff) <= tolerance,
+    });
+  });
+
+  return result;
+}
+
 /**
  * Остаток до и после конкретной смены — для контроля прямо в форме.
  * `shifts` — все прочие смены (без редактируемой). Приход, чужие смены и обнуления,

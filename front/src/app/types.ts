@@ -94,9 +94,10 @@ export interface GasDelivery {
 // Обнуление резервуара (газ закончился — остаток сброшен в ноль).
 export interface TankReset {
   id: string;
-  date: string;        // ISO ГГГГ-ММ-ДД
-  time: string;        // ЧЧ:ММ
+  date: string;          // ISO ГГГГ-ММ-ДД
+  time: string;          // ЧЧ:ММ
   note?: string;
+  pumpReadings: number[]; // показания колонок 1,2,3 на момент обнуления
 }
 
 export interface MonthlyOperatorStats {

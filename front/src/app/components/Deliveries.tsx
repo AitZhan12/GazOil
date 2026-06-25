@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, getSettings, getTankResets, addTankReset, deleteTankReset } from '../lib/storage';
 import { formatLiters, formatNumber } from '../lib/calculations';
-import { buildInventoryTimeline } from '../lib/inventory';
+import { buildInventoryTimeline, reconcileResets } from '../lib/inventory';
 import { AppSettings, GasDelivery, Shift, TankReset } from '../types';
 
 // Дата ДД.ММ.ГГГГ ↔ ISO, время ЧЧ:ММ — те же маски, что и в форме смены.
@@ -64,6 +64,7 @@ export function Deliveries() {
   const [resetDateText, setResetDateText] = useState('');
   const [resetTime, setResetTime] = useState('');
   const [resetNote, setResetNote] = useState('');
+  const [resetPumps, setResetPumps] = useState<string[]>(['', '', '']); // показания колонок 1,2,3
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +124,18 @@ export function Deliveries() {
     timeline.events.forEach(e => { if (e.kind === 'reset') map.set(e.refId, -e.delta); });
     return map;
   }, [timeline]);
+
+  // Сверка обнулений: разница показаний колонок vs литры смен за интервал.
+  const reconByReset = useMemo(
+    () => reconcileResets(resets, shifts, tolerance),
+    [resets, shifts, tolerance],
+  );
+  const resetDiscrepancies = useMemo(
+    () => sortedResets
+      .map(r => ({ reset: r, recon: reconByReset.get(r.id) }))
+      .filter(x => x.recon && !x.recon.withinTolerance),
+    [sortedResets, reconByReset],
+  );
 
   const openDialog = (d?: GasDelivery) => {
     if (d) {
@@ -191,6 +204,7 @@ export function Deliveries() {
     setResetDateText(isoToRu(now.toISOString().split('T')[0]));
     setResetTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
     setResetNote('');
+    setResetPumps(['', '', '']);
     setIsResetOpen(true);
   };
 
@@ -205,6 +219,7 @@ export function Deliveries() {
         date: isoDate,
         time: resetTime || '00:00',
         note: resetNote.trim() || undefined,
+        pumpReadings: resetPumps.map(p => parseFloat(p) || 0),
       });
       setResets(prev => [...prev, created]);
       setIsResetOpen(false);
@@ -371,6 +386,26 @@ export function Deliveries() {
         </div>
       )}
 
+      {/* Расхождения по сверке обнулений */}
+      {resetDiscrepancies.length > 0 && (
+        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
+          <div className="flex items-center gap-2 mb-1.5" style={{ fontWeight: 600 }}>
+            <AlertTriangle className="size-4 shrink-0" />
+            Расхождения по показаниям колонок ({resetDiscrepancies.length})
+          </div>
+          <ul className="space-y-1 pl-6 list-disc">
+            {resetDiscrepancies.map(({ reset, recon }) => (
+              <li key={reset.id}>
+                <span className="font-mono">{isoToRu(reset.date)} {reset.time}</span> — через колонки прошло{' '}
+                <span className="font-mono">{formatLiters(recon!.physicalDispensed)}</span>, по сменам продано{' '}
+                <span className="font-mono">{formatLiters(recon!.recordedSold)}</span>{' '}
+                (разница <span className="font-mono">{recon!.diff > 0 ? '+' : ''}{formatLiters(recon!.diff)}</span>)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Обнуления резервуара */}
       {sortedResets.length > 0 && (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
@@ -379,29 +414,56 @@ export function Deliveries() {
             <span className="text-slate-600" style={{ fontSize: '12px', fontWeight: 600 }}>Обнуления резервуара</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[520px]">
+            <table className="w-full border-collapse min-w-[760px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                   <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Дата / Время</th>
+                  <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Показания колонок</th>
                   <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Заметка</th>
                   <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Списано (л)</th>
+                  <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Сверка (л)</th>
                   <th className="px-4 py-2.5 text-right text-slate-500" style={{ fontSize: '11px', fontWeight: 600 }}>&nbsp;</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedResets.map((r, idx) => {
                   const written = writeOffByReset.get(r.id);
+                  const recon = reconByReset.get(r.id);
                   return (
                     <tr key={r.id} className={`border-b border-[#edf0f5] hover:bg-[#f8fafc] transition-colors ${idx === sortedResets.length - 1 ? 'border-b-0' : ''}`}>
                       <td className="px-4 py-2.5 border-r border-[#edf0f5]">
                         <span className="font-mono text-slate-900" style={{ fontSize: '13px' }}>{isoToRu(r.date)}</span>
                         <span className="text-slate-400 ml-2 font-mono" style={{ fontSize: '12px' }}>{r.time}</span>
                       </td>
+                      <td className="px-4 py-2.5 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                        {r.pumpReadings && r.pumpReadings.length > 0 ? (
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                            {r.pumpReadings.map((p, i) => (
+                              <span key={i} className="text-slate-600">
+                                <span className="text-slate-400" style={{ fontSize: '11px' }}>К{i + 1}:</span>{' '}
+                                <span className="font-mono">{formatNumber(p, 2)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : <span className="text-slate-300">—</span>}
+                      </td>
                       <td className="px-4 py-2.5 text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                         {r.note || <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                         {written !== undefined ? formatLiters(written) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                        {recon ? (
+                          <div>
+                            <div className={`font-mono ${recon.withinTolerance ? 'text-slate-500' : 'text-red-600'}`} style={{ fontWeight: recon.withinTolerance ? 400 : 600 }}>
+                              {recon.diff > 0 ? '+' : ''}{formatLiters(recon.diff)}
+                            </div>
+                            <div className="text-slate-400" style={{ fontSize: '10px' }}>
+                              колонки {formatNumber(recon.physicalDispensed, 0)} · смены {formatNumber(recon.recordedSold, 0)}
+                            </div>
+                          </div>
+                        ) : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <Button variant="ghost" size="sm" onClick={() => handleResetDelete(r.id)} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
@@ -494,6 +556,19 @@ export function Deliveries() {
                 <Input id="r-time" inputMode="numeric" placeholder="ЧЧ:ММ" value={resetTime}
                   onChange={e => setResetTime(maskTime(e.target.value))}
                   className="mt-1 h-8 font-mono border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-slate-600" style={{ fontSize: '12px' }}>Показания колонок</Label>
+              <div className="mt-1 grid grid-cols-3 gap-2">
+                {resetPumps.map((val, i) => (
+                  <div key={i}>
+                    <Input type="number" step="0.01" placeholder={`Колонка ${i + 1}`} value={val}
+                      onChange={e => setResetPumps(prev => prev.map((p, idx) => (idx === i ? e.target.value : p)))}
+                      className="h-8 font-mono border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }} />
+                    <div className="text-slate-400 mt-0.5 text-center" style={{ fontSize: '10px' }}>Колонка {i + 1}</div>
+                  </div>
+                ))}
               </div>
             </div>
             <div>
