@@ -48,6 +48,10 @@ public class SalaryConfig {
     @Column(name = "tank_capacity_liters", nullable = false, precision = 14, scale = 2)
     private BigDecimal tankCapacityLiters = BigDecimal.ZERO;
 
+    /** Допустимая погрешность замера при заливке (л) — в её пределах минус/перелив не считаем проблемой. */
+    @Column(name = "measurement_tolerance_liters", nullable = false, precision = 14, scale = 2)
+    private BigDecimal measurementToleranceLiters = BigDecimal.ZERO;
+
     @OneToMany(mappedBy = "config", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("thresholdLiters asc")
     private List<BonusTier> tiers = new ArrayList<>();

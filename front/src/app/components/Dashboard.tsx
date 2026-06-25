@@ -226,15 +226,6 @@ export function Dashboard() {
           </div>
         </>
       )}
-
-      <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg" style={{ fontSize: '12px' }}>
-        <span className="text-amber-600 shrink-0 mt-0.5">ℹ</span>
-        <span className="text-amber-800">
-          <strong>Про «день/ночь»:</strong> литры пишутся одной суммой за смену, а тип «Сутки»
-          покрывает и день, и ночь — поэтому разрез показан по <strong>типу смены</strong>
-          (Сутки / День / Ночь), а не по часам суток.
-        </span>
-      </div>
     </div>
   );
 }

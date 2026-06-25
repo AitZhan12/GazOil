@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, AlertTriangle, Fuel, Droplet } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle, Fuel, Droplet, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, getSettings } from '../lib/storage';
+import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, getSettings, getTankResets, addTankReset, deleteTankReset } from '../lib/storage';
 import { formatLiters, formatNumber } from '../lib/calculations';
 import { buildInventoryTimeline } from '../lib/inventory';
-import { AppSettings, GasDelivery, Shift } from '../types';
+import { AppSettings, GasDelivery, Shift, TankReset } from '../types';
 
 // Дата ДД.ММ.ГГГГ ↔ ISO, время ЧЧ:ММ — те же маски, что и в форме смены.
 function isoToRu(iso: string): string {
@@ -42,6 +42,7 @@ function isValidTime(t: string): boolean {
 export function Deliveries() {
   const [deliveries, setDeliveries] = useState<GasDelivery[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [resets, setResets] = useState<TankReset[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -57,19 +58,29 @@ export function Deliveries() {
   const [supplier, setSupplier] = useState('');
   const [note, setNote] = useState('');
 
+  // Диалог обнуления резервуара.
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetDateText, setResetDateText] = useState('');
+  const [resetTime, setResetTime] = useState('');
+  const [resetNote, setResetNote] = useState('');
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDeliveries(), getShifts(), getSettings()])
-      .then(([ds, shs, s]) => {
+    Promise.all([getDeliveries(), getShifts(), getSettings(), getTankResets()])
+      .then(([ds, shs, s, rs]) => {
         if (cancelled) return;
         setDeliveries(ds);
         setShifts(shs);
         setSettings(s);
+        setResets(rs);
       })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Ошибка загрузки'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const tolerance = settings?.measurementToleranceLiters ?? 0;
 
   const timeline = useMemo(
     () => buildInventoryTimeline(
@@ -77,8 +88,10 @@ export function Deliveries() {
       settings?.tankCapacityLiters ?? 0,
       deliveries,
       shifts,
+      resets,
+      settings?.measurementToleranceLiters ?? 0,
     ),
-    [settings, deliveries, shifts],
+    [settings, deliveries, shifts, resets],
   );
 
   // Остаток после каждого прихода — из ленты движения (по refId поставки).
@@ -97,7 +110,19 @@ export function Deliveries() {
 
   const capacity = settings?.tankCapacityLiters ?? 0;
   const fillPct = capacity > 0 ? Math.max(0, Math.min(100, (timeline.currentBalance / capacity) * 100)) : 0;
-  const lowBalance = timeline.currentBalance < 0;
+  const lowBalance = timeline.currentBalance < -tolerance;
+
+  // Обнуления — свежие сверху, с остатком, который был списан в этот момент.
+  const sortedResets = useMemo(
+    () => [...resets].sort((a, b) =>
+      `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)),
+    [resets],
+  );
+  const writeOffByReset = useMemo(() => {
+    const map = new Map<string, number>();
+    timeline.events.forEach(e => { if (e.kind === 'reset') map.set(e.refId, -e.delta); });
+    return map;
+  }, [timeline]);
 
   const openDialog = (d?: GasDelivery) => {
     if (d) {
@@ -161,6 +186,45 @@ export function Deliveries() {
     }
   };
 
+  const openResetDialog = () => {
+    const now = new Date();
+    setResetDateText(isoToRu(now.toISOString().split('T')[0]));
+    setResetTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+    setResetNote('');
+    setIsResetOpen(true);
+  };
+
+  const handleResetSave = async () => {
+    const isoDate = ruToIso(resetDateText);
+    if (!isoDate) { alert('Укажите дату в формате ДД.ММ.ГГГГ'); return; }
+    if (resetTime && !isValidTime(resetTime)) { alert('Время в формате ЧЧ:ММ'); return; }
+
+    setResetSaving(true);
+    try {
+      const created = await addTankReset({
+        date: isoDate,
+        time: resetTime || '00:00',
+        note: resetNote.trim() || undefined,
+      });
+      setResets(prev => [...prev, created]);
+      setIsResetOpen(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось обнулить резервуар');
+    } finally {
+      setResetSaving(false);
+    }
+  };
+
+  const handleResetDelete = async (id: string) => {
+    if (!confirm('Удалить обнуление? Остаток снова будет считаться без сброса в этой точке.')) return;
+    try {
+      await deleteTankReset(id);
+      setResets(prev => prev.filter(r => r.id !== id));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось удалить обнуление');
+    }
+  };
+
   const totalDelivered = deliveries.reduce((s, d) => s + d.liters, 0);
 
   return (
@@ -182,10 +246,16 @@ export function Deliveries() {
             {deliveries.length} поставок · всего {formatLiters(totalDelivered)}
           </p>
         </div>
-        <Button onClick={() => openDialog()} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
-          <Plus className="size-3.5" />
-          Добавить приход
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={openResetDialog} variant="outline" className="gap-1.5 border-[#d1d9e6] text-slate-600 hover:bg-[#f0f2f5] h-8 px-3" style={{ fontSize: '13px' }}>
+            <RotateCcw className="size-3.5" />
+            Обнулить резервуар
+          </Button>
+          <Button onClick={() => openDialog()} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
+            <Plus className="size-3.5" />
+            Добавить приход
+          </Button>
+        </div>
       </div>
 
       {/* Остаток в резервуаре */}
@@ -301,6 +371,52 @@ export function Deliveries() {
         </div>
       )}
 
+      {/* Обнуления резервуара */}
+      {sortedResets.length > 0 && (
+        <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
+          <div className="px-4 py-2.5 bg-[#f8fafc] border-b border-[#d1d9e6] flex items-center gap-2">
+            <RotateCcw className="size-3.5 text-slate-400" />
+            <span className="text-slate-600" style={{ fontSize: '12px', fontWeight: 600 }}>Обнуления резервуара</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[520px]">
+              <thead>
+                <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
+                  <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Дата / Время</th>
+                  <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Заметка</th>
+                  <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Списано (л)</th>
+                  <th className="px-4 py-2.5 text-right text-slate-500" style={{ fontSize: '11px', fontWeight: 600 }}>&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedResets.map((r, idx) => {
+                  const written = writeOffByReset.get(r.id);
+                  return (
+                    <tr key={r.id} className={`border-b border-[#edf0f5] hover:bg-[#f8fafc] transition-colors ${idx === sortedResets.length - 1 ? 'border-b-0' : ''}`}>
+                      <td className="px-4 py-2.5 border-r border-[#edf0f5]">
+                        <span className="font-mono text-slate-900" style={{ fontSize: '13px' }}>{isoToRu(r.date)}</span>
+                        <span className="text-slate-400 ml-2 font-mono" style={{ fontSize: '12px' }}>{r.time}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                        {r.note || <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                        {written !== undefined ? formatLiters(written) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleResetDelete(r.id)} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -349,6 +465,50 @@ export function Deliveries() {
             </Button>
             <Button onClick={handleSave} disabled={saving} className="h-8 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60" style={{ fontSize: '13px' }}>
               {saving ? 'Сохранение…' : 'Сохранить'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Диалог обнуления резервуара */}
+      <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: '15px', fontWeight: 600 }}>Обнулить резервуар</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-3">
+            <p className="text-slate-500" style={{ fontSize: '12px' }}>
+              Когда газ закончился, остаток на этот момент сбрасывается в ноль — накопленная
+              погрешность замеров списывается. Дальше остаток считается заново от нуля.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="r-date" className="text-slate-600" style={{ fontSize: '12px' }}>Дата</Label>
+                <Input id="r-date" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" value={resetDateText}
+                  onChange={e => setResetDateText(maskRuDate(e.target.value))}
+                  className="mt-1 h-8 font-mono border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }} />
+              </div>
+              <div>
+                <Label htmlFor="r-time" className="text-slate-600" style={{ fontSize: '12px' }}>Время</Label>
+                <Input id="r-time" inputMode="numeric" placeholder="ЧЧ:ММ" value={resetTime}
+                  onChange={e => setResetTime(maskTime(e.target.value))}
+                  className="mt-1 h-8 font-mono border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }} />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="r-note" className="text-slate-600" style={{ fontSize: '12px' }}>Заметка <span className="text-slate-400">(необязательно)</span></Label>
+              <Input id="r-note" value={resetNote} onChange={e => setResetNote(e.target.value)}
+                className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsResetOpen(false)} className="h-8 border-[#d1d9e6] text-slate-600" style={{ fontSize: '13px' }}>
+              Отмена
+            </Button>
+            <Button onClick={handleResetSave} disabled={resetSaving} className="h-8 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60" style={{ fontSize: '13px' }}>
+              {resetSaving ? 'Обнуление…' : 'Обнулить'}
             </Button>
           </DialogFooter>
         </DialogContent>

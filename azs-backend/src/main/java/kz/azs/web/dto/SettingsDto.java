@@ -10,7 +10,8 @@ public record SettingsDto(
         BigDecimal rateNight,              // ставка за смену «ночь»
         BigDecimal defaultDiscountPrice,   // льготная цена по умолчанию
         BigDecimal defaultBasePrice,       // основная цена по умолчанию
-        BigDecimal initialStockLiters,     // начальный остаток газа в резервуаре
-        BigDecimal tankCapacityLiters,     // объём резервуара (0 = без контроля перелива)
-        List<BonusTierDto> bonusTiers      // ступени бонуса (по возрастанию планки)
+        BigDecimal initialStockLiters,        // начальный остаток газа в резервуаре
+        BigDecimal tankCapacityLiters,        // объём резервуара (0 = без контроля перелива)
+        BigDecimal measurementToleranceLiters, // погрешность замера при заливке (л)
+        List<BonusTierDto> bonusTiers         // ступени бонуса (по возрастанию планки)
 ) {}

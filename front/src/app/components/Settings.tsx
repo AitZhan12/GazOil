@@ -139,8 +139,12 @@ export function Settings() {
             <div className={`${bodyClass} space-y-2.5`}>
               {rateField('initialStockLiters', 'Начальный остаток', settings.initialStockLiters, v => patch({ initialStockLiters: num(v) }))}
               {rateField('tankCapacityLiters', 'Объём резервуара', settings.tankCapacityLiters, v => patch({ tankCapacityLiters: num(v) }))}
+              {rateField('measurementToleranceLiters', 'Погрешность замера', settings.measurementToleranceLiters, v => patch({ measurementToleranceLiters: num(v) }))}
               <p className="text-slate-400" style={{ fontSize: '11px' }}>
                 Бегущий остаток = начальный остаток + приход − реализация смен (по времени). Объём резервуара = 0 — контроль перелива выключен. Приход вносится в разделе «Приход газа».
+              </p>
+              <p className="text-slate-400" style={{ fontSize: '11px' }}>
+                Погрешность замера — допустимое расхождение при заливке (обычно до 1000 л). В её пределах минус и перелив остатка не подсвечиваются как проблема. Когда газ заканчивается, остаток обнуляют кнопкой «Обнулить резервуар» в разделе «Приход газа».
               </p>
             </div>
           </div>

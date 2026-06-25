@@ -77,6 +77,7 @@ export interface AppSettings {
   defaultBasePrice: number;
   initialStockLiters: number;   // начальный остаток газа в резервуаре
   tankCapacityLiters: number;   // объём резервуара (0 = без контроля перелива)
+  measurementToleranceLiters: number; // погрешность замера при заливке (л)
   bonusTiers: BonusTier[];
 }
 
@@ -87,6 +88,14 @@ export interface GasDelivery {
   time: string;        // ЧЧ:ММ
   liters: number;
   supplier?: string;
+  note?: string;
+}
+
+// Обнуление резервуара (газ закончился — остаток сброшен в ноль).
+export interface TankReset {
+  id: string;
+  date: string;        // ISO ГГГГ-ММ-ДД
+  time: string;        // ЧЧ:ММ
   note?: string;
 }
 

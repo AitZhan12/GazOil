@@ -5,11 +5,11 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries } from '../lib/storage';
+import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries, getTankResets } from '../lib/storage';
 import { calculateShiftFields, formatCurrency, formatLiters, formatNumber, salaryRateFor, bonusForLiters } from '../lib/calculations';
 import { getLastPumpReadings } from '../lib/shift-helpers';
 import { balanceAroundShift } from '../lib/inventory';
-import { Shift, PumpReading, Operator, AppSettings, GasDelivery, ShiftType, SHIFT_TYPE_LABELS } from '../types';
+import { Shift, PumpReading, Operator, AppSettings, GasDelivery, TankReset, ShiftType, SHIFT_TYPE_LABELS } from '../types';
 
 // Формат СНГ: дата вводится как ДД.ММ.ГГГГ, а внутри храним ISO (ГГГГ-ММ-ДД).
 function isoToRu(iso: string): string {
@@ -73,6 +73,7 @@ export function ShiftForm() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [allShifts, setAllShifts] = useState<Shift[]>([]);
   const [deliveries, setDeliveries] = useState<GasDelivery[]>([]);
+  const [resets, setResets] = useState<TankReset[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
 
@@ -137,12 +138,13 @@ export function ShiftForm() {
 
     async function load() {
       try {
-        const [ops, appSettings, shs, dels] = await Promise.all([getOperators(), getSettings(), getShifts(), getDeliveries()]);
+        const [ops, appSettings, shs, dels, rsts] = await Promise.all([getOperators(), getSettings(), getShifts(), getDeliveries(), getTankResets()]);
         if (cancelled) return;
         setOperators(ops.filter(op => op.active));
         setSettings(appSettings);
         setAllShifts(shs);
         setDeliveries(dels);
+        setResets(rsts);
 
         if (isEditing && id) {
           const shift = await getShiftById(id);
@@ -243,6 +245,7 @@ export function ShiftForm() {
       initialStock: settings.initialStockLiters ?? 0,
       deliveries,
       otherShifts: allShifts.filter(s => s.id !== id),
+      resets,
       shiftEnd,
       shiftLiters: calculated.totalLiters,
     });
@@ -302,7 +305,7 @@ export function ShiftForm() {
     try {
       if (isEditing && id) await updateShift(id, shift);
       else await addShift(shift);
-      navigate('/');
+      navigate('/journal');
     } catch (err) {
       setErrors({ submit: err instanceof Error ? err.message : 'Не удалось сохранить смену' });
       setSaving(false);
@@ -343,7 +346,7 @@ export function ShiftForm() {
       <div className="flex items-center gap-3 mb-5">
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/journal')}
           className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 transition-colors"
           style={{ fontSize: '13px' }}
         >
@@ -689,7 +692,7 @@ export function ShiftForm() {
             <Save className="size-3.5" />
             {saving ? 'Сохранение…' : isEditing ? 'Сохранить изменения' : 'Создать смену'}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/')}
+          <Button type="button" variant="outline" onClick={() => navigate('/journal')}
             className="h-9 px-5 border-[#d1d9e6] text-slate-600 hover:bg-[#f0f2f5]" style={{ fontSize: '13px' }}>
             Отмена
           </Button>

@@ -27,8 +27,8 @@ export function Root() {
   };
 
   const navLinks = [
-    { path: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
-    { path: '/', label: 'Журнал смен', icon: FileText },
+    { path: '/', label: 'Дашборд', icon: LayoutDashboard },
+    { path: '/journal', label: 'Журнал смен', icon: FileText },
     { path: '/report', label: 'Месячный отчёт', icon: BarChart3 },
     { path: '/deliveries', label: 'Приход газа', icon: Droplet },
     { path: '/operators', label: 'Операторы', icon: Users },
