@@ -624,8 +624,9 @@ export function Deliveries() {
               </div>
 
               <p className="text-slate-500" style={{ fontSize: '11px' }}>
-                База: {detail.baselineLabel}. Расхождение = сумма зазоров на стыках смен + хвост после последней смены.
-                Внутри смены литры = конец−начало по показаниям, поэтому незаписанный газ виден только на стыках (колонка «Зазор перед»).
+                База: {detail.baselineLabel}. Сверка идёт по показаниям счётчиков: смена засчитывается срезом, попавшим в диапазон [база; обнуление],
+                поэтому смена, шедшая в момент обнуления, учитывается частью до обнуления (отметка «частично»). Расхождение = непокрытые сменами литры
+                (зазоры на стыках + хвост).
               </p>
 
               <div className="border border-[#d1d9e6] rounded-lg overflow-hidden">
@@ -646,6 +647,11 @@ export function Deliveries() {
                           <tr key={i} className={`border-b border-[#edf0f5] last:border-b-0 ${row.kind === 'tail' ? 'bg-[#f8fafc]' : ''}`}>
                             <td className="px-3 py-2 text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '12px' }}>
                               {row.kind === 'tail' ? 'Хвост до обнуления' : 'Смена'}
+                              {row.partial && (
+                                <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-600" style={{ fontSize: '10px' }} title="Смена шла в момент обнуления — засчитана частью, прошедшей до обнуления">
+                                  частично
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-2 font-mono text-slate-700 border-r border-[#edf0f5]" style={{ fontSize: '12px' }}>
                               {isoToRu(row.date)} {row.time}
@@ -664,7 +670,7 @@ export function Deliveries() {
                 </div>
               </div>
               <p className="text-slate-400" style={{ fontSize: '11px' }}>
-                Жёлтым — стыки, где через колонки прошло больше (или меньше), чем записано в смене. Большой «хвост» = обнуление сделали сильно позже последней смены.
+                Жёлтым — непокрытые сменами участки счётчика: пропущенная/недозаписанная смена или налив, не закрытый ни одной сменой. Если все стыки и хвост ≈ 0 — расхождения нет.
               </p>
             </div>
           ) : (

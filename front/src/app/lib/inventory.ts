@@ -108,11 +108,45 @@ export interface ResetReconciliation {
   withinTolerance: boolean;  // |diff| ≤ погрешности
 }
 
+// Σ показаний колонок одной смены (старт/конец) — суммируем по номерам колонок.
+function shiftStartSum(s: Shift, count: number): number {
+  let sum = 0;
+  for (let p = 1; p <= count; p++) sum += s.pumps.find(x => x.pumpNumber === p)?.start ?? 0;
+  return sum;
+}
+function shiftEndSum(s: Shift, count: number): number {
+  let sum = 0;
+  for (let p = 1; p <= count; p++) sum += s.pumps.find(x => x.pumpNumber === p)?.end ?? 0;
+  return sum;
+}
+
+// База сверки для обнуления: Σ показаний предыдущего обнуления, а для первого —
+// Σ стартовых показаний самой ранней смены. null, если базы нет.
+function reconBaseline(
+  prev: TankReset | undefined,
+  firstShift: Shift | undefined,
+  count: number,
+): { sum: number; label: string } | null {
+  if (prev && (prev.pumpReadings?.length ?? 0) > 0) {
+    let sum = 0;
+    for (let p = 1; p <= count; p++) sum += prev.pumpReadings[p - 1] ?? 0;
+    return { sum, label: `Прошлое обнуление — ${prev.date} ${prev.time}` };
+  }
+  if (!prev && firstShift) {
+    let sum = 0;
+    for (let p = 1; p <= count; p++) sum += firstShift.pumps.find(x => x.pumpNumber === p)?.start ?? 0;
+    return { sum, label: `Старт первой смены — ${firstShift.startDate} ${firstShift.startTime}` };
+  }
+  return null;
+}
+
 /**
- * Сверяет каждое обнуление: разница показаний колонок с прошлой базой = сколько газа
- * физически прошло через счётчики; сравнивается с суммой литров смен за тот же интервал.
- * База — предыдущее обнуление с показаниями, а для самого первого — стартовые показания
- * самой ранней смены. Обнуления без показаний (или без базы) в результат не попадают.
+ * Сверяет каждое обнуление по ПОКАЗАНИЯМ счётчиков (не по времени), чтобы корректно
+ * учитывать обнуление в любой момент, в т.ч. посреди смены. Физически прошло через
+ * колонки = Σ показаний обнуления − база. Записано = сумма «срезов» смен, попавших в
+ * диапазон показаний [база; обнуление] (смена на стыке учитывается ровно той частью,
+ * что прошла до обнуления). Расхождение = непокрытые сменами литры (пропуски/недозапись).
+ * База — предыдущее обнуление, для первого — стартовые показания самой ранней смены.
  */
 export function reconcileResets(
   resets: TankReset[],
@@ -121,50 +155,33 @@ export function reconcileResets(
 ): Map<string, ResetReconciliation> {
   const result = new Map<string, ResetReconciliation>();
   const sorted = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
-
-  // Самая ранняя смена — её стартовые показания служат базой для первого обнуления.
   const firstShift = [...shifts].sort(
     (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
 
   sorted.forEach((reset, i) => {
     const readings = reset.pumpReadings ?? [];
     if (readings.length === 0) return; // нечего сверять
-    const at = ts(reset.date, reset.time);
+    const count = readings.length;
 
-    const prev = sorted[i - 1];
-    let baseAt: number;
-    let baseReadingFor: (pump: number) => number | null;
+    const base = reconBaseline(sorted[i - 1], firstShift, count);
+    if (!base) return;
+    const bSum = base.sum;
+    const rSum = readings.reduce((s, v) => s + (v ?? 0), 0);
 
-    if (prev && (prev.pumpReadings?.length ?? 0) > 0) {
-      baseAt = ts(prev.date, prev.time);
-      baseReadingFor = (pump) => prev.pumpReadings[pump - 1] ?? null;
-    } else if (!prev && firstShift) {
-      baseAt = ts(firstShift.startDate, firstShift.startTime);
-      baseReadingFor = (pump) => firstShift.pumps.find(p => p.pumpNumber === pump)?.start ?? null;
-    } else {
-      return; // нет базы для сверки
+    const physical = round2(rSum - bSum);
+    // Записано = Σ срезов смен, попавших в диапазон показаний [bSum; rSum].
+    let recorded = 0;
+    for (const s of shifts) {
+      const lo = Math.max(shiftStartSum(s, count), bSum);
+      const hi = Math.min(shiftEndSum(s, count), rSum);
+      if (hi > lo) recorded += hi - lo;
     }
-
-    // Физически прошло через колонки = Σ (показание − база) по колонкам.
-    let physical = 0;
-    let baselineOk = true;
-    readings.forEach((val, idx) => {
-      const base = baseReadingFor(idx + 1);
-      if (base === null) { baselineOk = false; return; }
-      physical += val - base;
-    });
-    if (!baselineOk) return;
-
-    // Записано продано = Σ литров смен, закончившихся в интервале (baseAt, at].
-    const recorded = shifts.reduce((sum, s) => {
-      const e = ts(s.endDate, s.endTime);
-      return e > baseAt && e <= at ? sum + s.totalLiters : sum;
-    }, 0);
+    recorded = round2(recorded);
 
     const diff = round2(physical - recorded);
     result.set(reset.id, {
-      physicalDispensed: round2(physical),
-      recordedSold: round2(recorded),
+      physicalDispensed: physical,
+      recordedSold: recorded,
       diff,
       withinTolerance: Math.abs(diff) <= tolerance,
     });
@@ -178,8 +195,9 @@ export interface ResetDetailRow {
   kind: 'shift' | 'tail';
   date: string;
   time: string;
-  liters: number;   // для смены — записанные литры; для хвоста — 0
+  liters: number;    // для смены — засчитанный срез литров; для хвоста — 0
   gapBefore: number; // незаписанные литры на стыке перед этим звеном (Σ колонок)
+  partial: boolean;  // смену разрезала граница интервала (шла во время обнуления/базы)
 }
 
 export interface ResetDetail {
@@ -207,66 +225,49 @@ export function reconcileResetDetail(
   const reset = sorted[idx];
   const readings = reset.pumpReadings ?? [];
   if (readings.length === 0) return null;
-  const at = ts(reset.date, reset.time);
-  const pumpNums = readings.map((_, i) => i + 1);
+  const count = readings.length;
 
-  // База: предыдущее обнуление с показаниями, иначе старт самой ранней смены.
-  const prev = sorted[idx - 1];
-  let baseAt: number;
-  let baseReadingFor: (pump: number) => number | null;
-  let baselineLabel: string;
-  if (prev && (prev.pumpReadings?.length ?? 0) > 0) {
-    baseAt = ts(prev.date, prev.time);
-    baseReadingFor = (p) => prev.pumpReadings[p - 1] ?? null;
-    baselineLabel = `Прошлое обнуление — ${prev.date} ${prev.time}`;
-  } else {
-    const firstShift = [...shifts].sort(
-      (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
-    if (!firstShift) return null;
-    baseAt = ts(firstShift.startDate, firstShift.startTime);
-    baseReadingFor = (p) => firstShift.pumps.find(x => x.pumpNumber === p)?.start ?? null;
-    baselineLabel = `Старт первой смены — ${firstShift.startDate} ${firstShift.startTime}`;
-  }
+  const firstShift = [...shifts].sort(
+    (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
+  const base = reconBaseline(sorted[idx - 1], firstShift, count);
+  if (!base) return null;
+  const bSum = base.sum;
+  const rSum = readings.reduce((sum, v) => sum + (v ?? 0), 0);
 
-  let baseOk = true;
-  const baseSum = pumpNums.reduce((sum, p) => {
-    const v = baseReadingFor(p);
-    if (v === null) baseOk = false;
-    return sum + (v ?? 0);
-  }, 0);
-  if (!baseOk) return null;
-
-  const resetSum = pumpNums.reduce((sum, p) => sum + (readings[p - 1] ?? 0), 0);
-  const startSum = (s: Shift) => pumpNums.reduce((sum, p) => sum + (s.pumps.find(x => x.pumpNumber === p)?.start ?? 0), 0);
-  const endSum = (s: Shift) => pumpNums.reduce((sum, p) => sum + (s.pumps.find(x => x.pumpNumber === p)?.end ?? 0), 0);
-
-  const inInterval = shifts
-    .filter(s => { const e = ts(s.endDate, s.endTime); return e > baseAt && e <= at; })
-    .sort((a, b) => ts(a.endDate, a.endTime) - ts(b.endDate, b.endTime));
+  // Смены, чей диапазон показаний пересекает интервал [bSum; rSum], по возрастанию старта.
+  const overlapping = shifts
+    .map(s => ({ s, a: shiftStartSum(s, count), b: shiftEndSum(s, count) }))
+    .filter(x => x.b > bSum && x.a < rSum)
+    .sort((x, y) => x.a - y.a);
 
   const rows: ResetDetailRow[] = [];
-  let prevEnd = baseSum;
-  let totalShiftLiters = 0;
-  for (const s of inInterval) {
+  let covered = bSum;       // докуда показания уже покрыты сменами
+  let totalRecorded = 0;
+  for (const { s, a, b } of overlapping) {
+    const lo = Math.max(a, bSum);
+    const hi = Math.min(b, rSum);
+    const contribution = round2(hi - lo);   // срез смены внутри интервала
     rows.push({
       kind: 'shift', date: s.endDate, time: s.endTime,
-      liters: round2(s.totalLiters), gapBefore: round2(startSum(s) - prevEnd),
+      liters: contribution,
+      gapBefore: round2(lo - covered),       // непокрытый диапазон перед сменой
+      partial: a < bSum || b > rSum,         // смену разрезала граница интервала
     });
-    prevEnd = endSum(s);
-    totalShiftLiters += s.totalLiters;
+    covered = Math.max(covered, hi);
+    totalRecorded += contribution;
   }
   rows.push({
     kind: 'tail', date: reset.date, time: reset.time,
-    liters: 0, gapBefore: round2(resetSum - prevEnd),
+    liters: 0, gapBefore: round2(rSum - covered), partial: false,
   });
 
-  const physicalDispensed = round2(resetSum - baseSum);
+  const physicalDispensed = round2(rSum - bSum);
   return {
-    baselineLabel,
+    baselineLabel: base.label,
     rows,
-    totalShiftLiters: round2(totalShiftLiters),
+    totalShiftLiters: round2(totalRecorded),
     physicalDispensed,
-    diff: round2(physicalDispensed - totalShiftLiters),
+    diff: round2(physicalDispensed - totalRecorded),
   };
 }
 
