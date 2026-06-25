@@ -3,7 +3,7 @@ name: Deploy to server
 on:
   push:
     branches:
-      - main   # поменяй на dev / production если нужно
+      - main
   workflow_dispatch:
 
 jobs:
@@ -23,9 +23,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" << 'EOF'
             set -e
 
-            cd "${{ secrets.PROJECT_PATH }}"
+            cd /root/GAZ/GazOil
 
-            git pull
+            git pull origin main
 
             docker compose down
             docker compose up -d --build
