@@ -1,20 +1,31 @@
 services:
-  db:
-    image: postgres:16
-    container_name: azs-db
+  backend:
+    build:
+      context: ./azs-backend
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: azs
-      POSTGRES_USER: azs
-      POSTGRES_PASSWORD: azs
-    ports:
-      - "5432:5432"
-    volumes:
-      - azs-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U azs -d azs"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5432/azs
+      SPRING_DATASOURCE_USERNAME: azs
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SERVER_PORT: 8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - gazoil-network
 
-volumes:
-  azs-pgdata:
+  frontend:
+    build:
+      context: ./front
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - "3003:80"
+    depends_on:
+      - backend
+    networks:
+      - gazoil-network
+
+networks:
+  gazoil-network:
+    driver: bridge

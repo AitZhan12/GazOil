@@ -1,0 +1,34 @@
+name: Deploy to server
+
+on:
+  push:
+    branches:
+      - main   # поменяй на dev / production если нужно
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        run: |
+          mkdir -p ~/.ssh
+
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh-keyscan -p "${{ secrets.SERVER_PORT }}" -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" << 'EOF'
+            set -e
+
+            cd "${{ secrets.PROJECT_PATH }}"
+
+            git pull
+
+            docker compose down
+            docker compose up -d --build
+
+            docker compose ps
+          EOF
