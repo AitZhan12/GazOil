@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, AlertTriangle, Fuel, Droplet, RotateCcw } from 'l
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, getSettings, getTankResets, addTankReset, deleteTankReset } from '../lib/storage';
 import { formatLiters, formatNumber } from '../lib/calculations';
@@ -46,6 +47,10 @@ export function Deliveries() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editing, setEditing] = useState<GasDelivery | null>(null);
@@ -86,6 +91,20 @@ export function Deliveries() {
 
   const tolerance = settings?.measurementToleranceLiters ?? 0;
 
+  const monthOptions = useMemo(() => {
+    const options = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
+      options.push({ value, label });
+    }
+    return options;
+  }, []);
+
+  const selectedMonthLabel = monthOptions.find(option => option.value === selectedMonth)?.label || selectedMonth;
+
   const timeline = useMemo(
     () => buildInventoryTimeline(
       settings?.initialStockLiters ?? 0,
@@ -105,11 +124,16 @@ export function Deliveries() {
     return map;
   }, [timeline]);
 
-  // Поставки по убыванию даты (свежие сверху).
+  const monthDeliveries = useMemo(
+    () => deliveries.filter(d => d.date.substring(0, 7) === selectedMonth),
+    [deliveries, selectedMonth],
+  );
+
+  // Поставки выбранного месяца по убыванию даты (свежие сверху).
   const sortedDeliveries = useMemo(
-    () => [...deliveries].sort((a, b) =>
+    () => [...monthDeliveries].sort((a, b) =>
       `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)),
-    [deliveries],
+    [monthDeliveries],
   );
 
   const capacity = settings?.tankCapacityLiters ?? 0;
@@ -117,10 +141,14 @@ export function Deliveries() {
   const lowBalance = timeline.currentBalance < -tolerance;
 
   // Обнуления — свежие сверху, с остатком, который был списан в этот момент.
+  const monthResets = useMemo(
+    () => resets.filter(r => r.date.substring(0, 7) === selectedMonth),
+    [resets, selectedMonth],
+  );
   const sortedResets = useMemo(
-    () => [...resets].sort((a, b) =>
+    () => [...monthResets].sort((a, b) =>
       `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)),
-    [resets],
+    [monthResets],
   );
   const writeOffByReset = useMemo(() => {
     const map = new Map<string, number>();
@@ -138,6 +166,10 @@ export function Deliveries() {
       .map(r => ({ reset: r, recon: reconByReset.get(r.id) }))
       .filter(x => x.recon && !x.recon.withinTolerance),
     [sortedResets, reconByReset],
+  );
+  const visibleWarnings = useMemo(
+    () => timeline.warnings.filter(w => w.date.substring(0, 7) === selectedMonth),
+    [timeline.warnings, selectedMonth],
   );
   const detail = useMemo(
     () => (detailReset ? reconcileResetDetail(detailReset.id, resets, shifts) : null),
@@ -247,7 +279,7 @@ export function Deliveries() {
     }
   };
 
-  const totalDelivered = deliveries.reduce((s, d) => s + d.liters, 0);
+  const totalDelivered = monthDeliveries.reduce((s, d) => s + d.liters, 0);
 
   return (
     <div className="space-y-4">
@@ -265,10 +297,22 @@ export function Deliveries() {
         <div>
           <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Приход газа</h1>
           <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>
-            {deliveries.length} поставок · всего {formatLiters(totalDelivered)}
+            {monthDeliveries.length} поставок за {selectedMonthLabel} · всего {formatLiters(totalDelivered)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="h-8 w-full sm:w-52 border-[#d1d9e6] bg-[#f8fafc]" style={{ fontSize: '13px' }}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(option => (
+                <SelectItem key={option.value} value={option.value} style={{ fontSize: '13px' }}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button onClick={openResetDialog} variant="outline" className="gap-1.5 border-[#d1d9e6] text-slate-600 hover:bg-[#f0f2f5] h-8 px-3" style={{ fontSize: '13px' }}>
             <RotateCcw className="size-3.5" />
             Обнулить резервуар
@@ -312,14 +356,14 @@ export function Deliveries() {
       </div>
 
       {/* Предупреждения по остатку */}
-      {timeline.warnings.length > 0 && (
+      {visibleWarnings.length > 0 && (
         <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
           <div className="flex items-center gap-2 mb-1.5" style={{ fontWeight: 600 }}>
             <AlertTriangle className="size-4 shrink-0" />
-            Проблемы с остатком ({timeline.warnings.length})
+            Проблемы с остатком ({visibleWarnings.length})
           </div>
           <ul className="space-y-1 pl-6 list-disc">
-            {timeline.warnings.map((w, i) => (
+            {visibleWarnings.map((w, i) => (
               <li key={i}>
                 <span className="font-mono">{isoToRu(w.date)} {w.time}</span> — {w.label}:{' '}
                 {w.negative
@@ -332,16 +376,16 @@ export function Deliveries() {
       )}
 
       {/* Таблица поставок */}
-      {!loading && deliveries.length === 0 ? (
+      {!loading && monthDeliveries.length === 0 ? (
         <div className="bg-white border border-[#d1d9e6] rounded-lg p-16 text-center">
           <Droplet className="size-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500" style={{ fontSize: '14px' }}>Поставок ещё нет</p>
+          <p className="text-slate-500" style={{ fontSize: '14px' }}>Нет поставок за выбранный период</p>
           <Button onClick={() => openDialog()} className="mt-4 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
             <Plus className="size-3.5" />
             Добавить первый приход
           </Button>
         </div>
-      ) : deliveries.length > 0 && (
+      ) : monthDeliveries.length > 0 && (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full border-collapse min-w-[640px]">
