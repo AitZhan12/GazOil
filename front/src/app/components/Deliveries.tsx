@@ -280,6 +280,14 @@ export function Deliveries() {
   };
 
   const totalDelivered = monthDeliveries.reduce((s, d) => s + d.liters, 0);
+  const monthEndBalance = useMemo(() => {
+    let balance = settings?.initialStockLiters ?? 0;
+    for (const event of timeline.events) {
+      if (event.date.substring(0, 7) > selectedMonth) break;
+      balance = event.balanceAfter;
+    }
+    return balance;
+  }, [settings, timeline.events, selectedMonth]);
 
   return (
     <div className="space-y-4">
@@ -432,6 +440,21 @@ export function Deliveries() {
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="bg-[#f0f2f5] border-t-2 border-[#d1d9e6]">
+                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
+                <td className="px-4 py-2.5 text-right border-r border-[#edf0f5] text-slate-700" style={{ fontSize: '13px', fontWeight: 600 }}>
+                  Итого за {selectedMonthLabel}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-emerald-700 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 700 }}>
+                  +{formatLiters(totalDelivered)}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 700 }}>
+                  {formatLiters(monthEndBalance)}
+                </td>
+                <td className="px-4 py-2.5" />
+              </tr>
+            </tfoot>
           </table>
           </div>
         </div>
