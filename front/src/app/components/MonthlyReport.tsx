@@ -1,12 +1,41 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { Download, FileText, Pencil, Save } from 'lucide-react';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { getShifts, getOperators } from '../lib/storage';
-import { formatCurrency, formatLiters } from '../lib/calculations';
+import { formatCurrency, formatLiters, formatNumber, round2 } from '../lib/calculations';
 import { MonthlyOperatorStats, Operator, Shift, SHIFT_TYPE_LABELS } from '../types';
 
 const ALL = 'all';
+const SERVICE_MEMO_KEY = 'gazoil.report.serviceMemoByMonth';
+const KASPI_QR_KEY = 'gazoil.report.kaspiQrByMonth';
+const PUMP_OVERRIDES_KEY = 'gazoil.report.pumpOverridesByMonth';
+const BREAKDOWN_OVERRIDES_KEY = 'gazoil.report.breakdownOverridesByMonth';
+
+type PumpOverrideField = 'start' | 'end';
+type BreakdownOverrideField = 'totalLiters' | 'voucherLiters' | 'cardLiters' | 'discountLiters';
+
+function readStoredMap(key: string): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readStoredNestedMap(key: string): Record<string, Record<string, string>> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
 
 export function MonthlyReport() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -18,6 +47,15 @@ export function MonthlyReport() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [error, setError] = useState('');
+  const [serviceMemoByMonth, setServiceMemoByMonth] = useState<Record<string, string>>(() => readStoredMap(SERVICE_MEMO_KEY));
+  const [kaspiQrByMonth, setKaspiQrByMonth] = useState<Record<string, string>>(() => readStoredMap(KASPI_QR_KEY));
+  const [pumpOverridesByMonth, setPumpOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(PUMP_OVERRIDES_KEY));
+  const [breakdownOverridesByMonth, setBreakdownOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(BREAKDOWN_OVERRIDES_KEY));
+  const [isReportEditing, setIsReportEditing] = useState(false);
+  const [draftServiceMemo, setDraftServiceMemo] = useState('');
+  const [draftKaspiQr, setDraftKaspiQr] = useState('');
+  const [draftPumpOverrides, setDraftPumpOverrides] = useState<Record<string, string>>({});
+  const [draftBreakdownOverrides, setDraftBreakdownOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +68,22 @@ export function MonthlyReport() {
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Ошибка загрузки'); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SERVICE_MEMO_KEY, JSON.stringify(serviceMemoByMonth));
+  }, [serviceMemoByMonth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(KASPI_QR_KEY, JSON.stringify(kaspiQrByMonth));
+  }, [kaspiQrByMonth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PUMP_OVERRIDES_KEY, JSON.stringify(pumpOverridesByMonth));
+  }, [pumpOverridesByMonth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BREAKDOWN_OVERRIDES_KEY, JSON.stringify(breakdownOverridesByMonth));
+  }, [breakdownOverridesByMonth]);
 
   // Generate month options (last 12 months)
   const monthOptions = useMemo(() => {
@@ -81,6 +135,131 @@ export function MonthlyReport() {
     return stats;
   }, [operators, shifts, selectedMonth]);
 
+  const monthShifts = useMemo(() => {
+    return shifts
+      .filter(shift => shift.startDate.substring(0, 7) === selectedMonth)
+      .sort((a, b) => (a.startDate + a.startTime).localeCompare(b.startDate + b.startTime));
+  }, [shifts, selectedMonth]);
+
+  const parseMoneyInput = (value: string) => {
+    const normalized = value.replace(/\s/g, '').replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const editableNumber = (value: string | undefined, fallback: number) => {
+    return value === undefined || value.trim() === '' ? fallback : parseMoneyInput(value);
+  };
+
+  const pumpOverrideKey = (pumpNumber: number, field: PumpOverrideField) => `${pumpNumber}.${field}`;
+
+  const setPumpOverride = (pumpNumber: number, field: PumpOverrideField, value: string) => {
+    const key = pumpOverrideKey(pumpNumber, field);
+    if (isReportEditing) {
+      setDraftPumpOverrides(prev => ({
+        ...prev,
+        [key]: value,
+      }));
+      return;
+    }
+
+    setPumpOverridesByMonth(prev => ({
+      ...prev,
+      [selectedMonth]: {
+        ...(prev[selectedMonth] ?? {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const setBreakdownOverride = (field: BreakdownOverrideField, value: string) => {
+    if (isReportEditing) {
+      setDraftBreakdownOverrides(prev => ({
+        ...prev,
+        [field]: value,
+      }));
+      return;
+    }
+
+    setBreakdownOverridesByMonth(prev => ({
+      ...prev,
+      [selectedMonth]: {
+        ...(prev[selectedMonth] ?? {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const reportCalculator = useMemo(() => {
+    const pumpOverrides = isReportEditing ? draftPumpOverrides : pumpOverridesByMonth[selectedMonth] ?? {};
+    const breakdownOverrides = isReportEditing ? draftBreakdownOverrides : breakdownOverridesByMonth[selectedMonth] ?? {};
+
+    const pumpRows = [1, 2, 3].map(pumpNumber => {
+      const withPump = monthShifts.filter(shift => shift.pumps.some(pump => pump.pumpNumber === pumpNumber));
+      const first = withPump[0]?.pumps.find(pump => pump.pumpNumber === pumpNumber);
+      const last = withPump[withPump.length - 1]?.pumps.find(pump => pump.pumpNumber === pumpNumber);
+      const autoStart = first?.start ?? 0;
+      const autoEnd = last?.end ?? 0;
+      const start = editableNumber(pumpOverrides[pumpOverrideKey(pumpNumber, 'start')], autoStart);
+      const end = editableNumber(pumpOverrides[pumpOverrideKey(pumpNumber, 'end')], autoEnd);
+      return { pumpNumber, start, end, autoStart, autoEnd, sales: round2(end - start) };
+    });
+
+    const regularPriceSet = new Set(monthShifts.map(shift => shift.regularPrice));
+    const discountPriceSet = new Set(monthShifts.map(shift => shift.discountPrice));
+    const autoTotalLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.totalLiters, 0));
+    const totalByReadings = round2(pumpRows.reduce((sum, row) => sum + row.sales, 0));
+    const autoVoucherLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.voucherLiters, 0));
+    const autoCardLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.cardLiters, 0));
+    const autoDiscountLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.discountLiters, 0));
+    const autoRegularLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.remainderLiters, 0));
+    const autoRegularAmount = round2(monthShifts.reduce((sum, shift) => sum + shift.baseAmount, 0));
+    const autoDiscountAmount = round2(monthShifts.reduce((sum, shift) => sum + shift.discountAmount, 0));
+    const hasManualBreakdown = (['totalLiters', 'voucherLiters', 'cardLiters', 'discountLiters'] as BreakdownOverrideField[])
+      .some(field => breakdownOverrides[field] !== undefined && breakdownOverrides[field].trim() !== '');
+    const totalLiters = round2(editableNumber(breakdownOverrides.totalLiters, autoTotalLiters));
+    const voucherLiters = round2(editableNumber(breakdownOverrides.voucherLiters, autoVoucherLiters));
+    const cardLiters = round2(editableNumber(breakdownOverrides.cardLiters, autoCardLiters));
+    const discountLiters = round2(editableNumber(breakdownOverrides.discountLiters, autoDiscountLiters));
+    const regularUnitPrice = regularPriceSet.size === 1 ? [...regularPriceSet][0] ?? 0 : autoRegularAmount / (autoRegularLiters || 1);
+    const discountUnitPrice = discountPriceSet.size === 1 ? [...discountPriceSet][0] ?? 0 : autoDiscountAmount / (autoDiscountLiters || 1);
+    const regularLiters = hasManualBreakdown ? round2(totalLiters - voucherLiters - cardLiters - discountLiters) : autoRegularLiters;
+    const regularAmount = hasManualBreakdown ? round2(regularLiters * regularUnitPrice) : autoRegularAmount;
+    const discountAmount = hasManualBreakdown ? round2(discountLiters * discountUnitPrice) : autoDiscountAmount;
+    const autoKaspiQR = round2(monthShifts.reduce((sum, shift) => sum + shift.kaspiQR, 0));
+    const kaspiTransfer = round2(monthShifts.reduce((sum, shift) => sum + shift.kaspiTransfer, 0));
+    const totalRevenue = round2(regularAmount + discountAmount);
+    const serviceMemoInput = isReportEditing ? draftServiceMemo : serviceMemoByMonth[selectedMonth] ?? '';
+    const serviceMemo = parseMoneyInput(serviceMemoInput);
+    const kaspiQrInput = isReportEditing ? draftKaspiQr : kaspiQrByMonth[selectedMonth] ?? '';
+    const effectiveKaspiQR = kaspiQrInput.trim() === '' ? autoKaspiQR : parseMoneyInput(kaspiQrInput);
+    const cashToDeposit = round2(totalRevenue - effectiveKaspiQR - kaspiTransfer - serviceMemo);
+
+    return {
+      pumpRows,
+      autoTotalLiters,
+      totalLiters,
+      totalByReadings,
+      autoVoucherLiters,
+      voucherLiters,
+      autoCardLiters,
+      cardLiters,
+      autoDiscountLiters,
+      discountLiters,
+      regularLiters,
+      regularAmount,
+      discountAmount,
+      totalRevenue,
+      autoKaspiQR,
+      effectiveKaspiQR,
+      kaspiTransfer,
+      serviceMemo,
+      cashToDeposit,
+      regularPriceLabel: regularPriceSet.size === 1 ? `${formatNumber([...regularPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
+      discountPriceLabel: discountPriceSet.size === 1 ? `${formatNumber([...discountPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
+    };
+  }, [monthShifts, selectedMonth, serviceMemoByMonth, kaspiQrByMonth, pumpOverridesByMonth, breakdownOverridesByMonth, isReportEditing, draftServiceMemo, draftKaspiQr, draftPumpOverrides, draftBreakdownOverrides]);
+
   // Calculate totals
   const totals = useMemo(() => {
     return operatorStats.reduce(
@@ -124,6 +303,31 @@ export function MonthlyReport() {
   const selectedMonthLabel = monthOptions.find(opt => opt.value === selectedMonth)?.label || '';
   const selectedOperatorName =
     operators.find(op => op.id === selectedOperator)?.name || '';
+  const serviceMemoInput = isReportEditing ? draftServiceMemo : serviceMemoByMonth[selectedMonth] ?? '';
+  const kaspiQrInput = isReportEditing ? draftKaspiQr : kaspiQrByMonth[selectedMonth] ?? '';
+  const pumpOverrides = isReportEditing ? draftPumpOverrides : pumpOverridesByMonth[selectedMonth] ?? {};
+  const breakdownOverrides = isReportEditing ? draftBreakdownOverrides : breakdownOverridesByMonth[selectedMonth] ?? {};
+
+  const handleMonthChange = (value: string) => {
+    setIsReportEditing(false);
+    setSelectedMonth(value);
+  };
+
+  const handleStartReportEdit = () => {
+    setDraftServiceMemo(serviceMemoByMonth[selectedMonth] ?? '');
+    setDraftKaspiQr(kaspiQrByMonth[selectedMonth] ?? '');
+    setDraftPumpOverrides(pumpOverridesByMonth[selectedMonth] ?? {});
+    setDraftBreakdownOverrides(breakdownOverridesByMonth[selectedMonth] ?? {});
+    setIsReportEditing(true);
+  };
+
+  const handleSaveReportEdit = () => {
+    setServiceMemoByMonth(prev => ({ ...prev, [selectedMonth]: draftServiceMemo }));
+    setKaspiQrByMonth(prev => ({ ...prev, [selectedMonth]: draftKaspiQr }));
+    setPumpOverridesByMonth(prev => ({ ...prev, [selectedMonth]: draftPumpOverrides }));
+    setBreakdownOverridesByMonth(prev => ({ ...prev, [selectedMonth]: draftBreakdownOverrides }));
+    setIsReportEditing(false);
+  };
 
   const formatDate = (iso: string) => {
     const [y, m, d] = iso.split('-');
@@ -141,6 +345,60 @@ export function MonthlyReport() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const downloadWord = (html: string, filename: string) => {
+    const doc = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"><title>${filename}</title></head>
+        <body>${html}</body>
+      </html>`;
+    const blob = new Blob(['\ufeff', doc], { type: 'application/msword;charset=utf-8' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const money = (value: number) => formatNumber(value, 2);
+  const liters = (value: number) => formatNumber(value, 2);
+
+  const handleWordExport = () => {
+    const calc = reportCalculator;
+    const pumpRows = calc.pumpRows.map(row => `
+      <tr>
+        <td>Колонка ${row.pumpNumber}</td>
+        <td style="text-align:right">${liters(row.start)}</td>
+        <td style="text-align:right">${liters(row.end)}</td>
+        <td style="text-align:right"><b>${liters(row.sales)}</b></td>
+      </tr>`).join('');
+
+    downloadWord(`
+      <h2>Отчетный калькулятор</h2>
+      <p><b>Период:</b> ${selectedMonthLabel}</p>
+      <table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%">
+        <tr><th>Показания</th><th>Начало</th><th>Конец</th><th>Продажа, л</th></tr>
+        ${pumpRows}
+        <tr><td colspan="3"><b>Итого по показаниям</b></td><td style="text-align:right"><b>${liters(calc.totalByReadings)}</b></td></tr>
+      </table>
+      <br />
+      <table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%">
+        <tr><td>Продажа по сменам</td><td style="text-align:right">${liters(calc.totalLiters)} л</td></tr>
+        <tr><td>Талоны</td><td style="text-align:right">${liters(calc.voucherLiters)} л</td></tr>
+        <tr><td>Товарная карта</td><td style="text-align:right">${liters(calc.cardLiters)} л</td></tr>
+        <tr><td>Дисконтная карта</td><td style="text-align:right">${liters(calc.discountLiters)} л</td></tr>
+        <tr><td>По ${calc.regularPriceLabel}</td><td style="text-align:right">${liters(calc.regularLiters)} л = ${money(calc.regularAmount)} ₸</td></tr>
+        <tr><td>По ${calc.discountPriceLabel}</td><td style="text-align:right">${liters(calc.discountLiters)} л = ${money(calc.discountAmount)} ₸</td></tr>
+        <tr><td>Kaspi QR</td><td style="text-align:right">${money(calc.effectiveKaspiQR)} ₸</td></tr>
+        <tr><td>Kaspi перевод</td><td style="text-align:right">${money(calc.kaspiTransfer)} ₸</td></tr>
+        <tr><td>Служебная записка</td><td style="text-align:right">${money(calc.serviceMemo)} ₸</td></tr>
+        <tr><td><b>К внесению в кассу</b></td><td style="text-align:right"><b>${money(calc.cashToDeposit)} ₸</b></td></tr>
+      </table>
+    `, `Отчетный_калькулятор_${selectedMonthLabel}.doc`);
   };
 
   const handleExport = () => {
@@ -214,6 +472,8 @@ export function MonthlyReport() {
   const thCell = 'px-4 py-2.5 text-slate-500 border-r border-[#edf0f5] last:border-r-0';
   const thStyle = { fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const };
   const tdNum = 'px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5]';
+  const calcLabel = 'text-slate-500 uppercase tracking-[0.05em]';
+  const calcValue = 'font-mono text-slate-900';
 
   return (
     <div className="space-y-4">
@@ -245,7 +505,7 @@ export function MonthlyReport() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <Select value={selectedMonth} onValueChange={handleMonthChange}>
             <SelectTrigger className="h-8 w-40 sm:w-52 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
               <SelectValue />
             </SelectTrigger>
@@ -375,6 +635,176 @@ export function MonthlyReport() {
         </div>
       )}
 
+      {monthShifts.length > 0 && (
+        <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#d1d9e6] bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-slate-900" style={{ fontSize: '16px', fontWeight: 700 }}>Отчетный калькулятор</h2>
+              <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>Автоматический расчет кассового отчета за {selectedMonthLabel}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {isReportEditing ? (
+                <Button onClick={handleSaveReportEdit} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
+                  <Save className="size-3.5" />
+                  Сохранить
+                </Button>
+              ) : (
+                <Button onClick={handleStartReportEdit} variant="outline" className="gap-1.5 h-8 px-3 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
+                  <Pencil className="size-3.5" />
+                  Редактировать
+                </Button>
+              )}
+              <Button onClick={handleWordExport} className="gap-1.5 bg-slate-900 hover:bg-slate-800 text-white h-8 px-3" style={{ fontSize: '13px' }}>
+                <FileText className="size-3.5" />
+                Word
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <div>
+              <div className="mb-2 text-slate-700" style={{ fontSize: '13px', fontWeight: 600 }}>Показания колонок за месяц</div>
+              <div className="overflow-x-auto border border-[#edf0f5] rounded-lg">
+                <table className="w-full border-collapse min-w-[620px]">
+                  <thead>
+                    <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
+                      <th className={`${thCell} text-left`} style={thStyle}>Колонка</th>
+                      <th className={`${thCell} text-right`} style={thStyle}>Начало</th>
+                      <th className={`${thCell} text-right`} style={thStyle}>Конец</th>
+                      <th className={`${thCell} text-right`} style={thStyle}>Продажа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportCalculator.pumpRows.map(row => (
+                      <tr key={row.pumpNumber} className="border-b border-[#edf0f5] last:border-b-0">
+                        <td className="px-4 py-2.5 text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>Колонка {row.pumpNumber}</td>
+                        <td className="px-3 py-2 border-r border-[#edf0f5]">
+                          <Input
+                            inputMode="decimal"
+                            value={pumpOverrides[pumpOverrideKey(row.pumpNumber, 'start')] ?? formatNumber(row.autoStart, 2)}
+                            onChange={event => setPumpOverride(row.pumpNumber, 'start', event.target.value)}
+                            placeholder={formatNumber(row.autoStart, 2)}
+                            disabled={!isReportEditing}
+                            className="h-8 bg-white border-[#d1d9e6] font-mono text-right"
+                            style={{ fontSize: '13px' }}
+                          />
+                        </td>
+                        <td className="px-3 py-2 border-r border-[#edf0f5]">
+                          <Input
+                            inputMode="decimal"
+                            value={pumpOverrides[pumpOverrideKey(row.pumpNumber, 'end')] ?? formatNumber(row.autoEnd, 2)}
+                            onChange={event => setPumpOverride(row.pumpNumber, 'end', event.target.value)}
+                            placeholder={formatNumber(row.autoEnd, 2)}
+                            disabled={!isReportEditing}
+                            className="h-8 bg-white border-[#d1d9e6] font-mono text-right"
+                            style={{ fontSize: '13px' }}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-blue-900 bg-blue-50/50" style={{ fontSize: '13px', fontWeight: 700 }}>{formatLiters(row.sales)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#f0f2f5] border-t border-[#d1d9e6]">
+                      <td className="px-4 py-2.5 text-slate-600 border-r border-[#edf0f5]" colSpan={3} style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>Итого по показаниям</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-blue-900" style={{ fontSize: '14px', fontWeight: 700 }}>{formatLiters(reportCalculator.totalByReadings)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 border border-[#edf0f5] rounded-lg overflow-hidden">
+                <div className="px-4 py-2.5 bg-[#f8fafc] border-b border-[#edf0f5] text-slate-700" style={{ fontSize: '13px', fontWeight: 600 }}>Разбивка реализации</div>
+                <div className="divide-y divide-[#edf0f5]">
+                  <CalcInputRow
+                    label="Продажа по сменам"
+                    value={breakdownOverrides.totalLiters ?? formatNumber(reportCalculator.autoTotalLiters, 2)}
+                    placeholder={formatNumber(reportCalculator.autoTotalLiters, 2)}
+                    onChange={value => setBreakdownOverride('totalLiters', value)}
+                    disabled={!isReportEditing}
+                  />
+                  <CalcInputRow
+                    label="Талоны"
+                    value={breakdownOverrides.voucherLiters ?? formatNumber(reportCalculator.autoVoucherLiters, 2)}
+                    placeholder={formatNumber(reportCalculator.autoVoucherLiters, 2)}
+                    onChange={value => setBreakdownOverride('voucherLiters', value)}
+                    disabled={!isReportEditing}
+                  />
+                  <CalcInputRow
+                    label="Товарная карта"
+                    value={breakdownOverrides.cardLiters ?? formatNumber(reportCalculator.autoCardLiters, 2)}
+                    placeholder={formatNumber(reportCalculator.autoCardLiters, 2)}
+                    onChange={value => setBreakdownOverride('cardLiters', value)}
+                    disabled={!isReportEditing}
+                  />
+                  <CalcInputRow
+                    label="Дисконтная карта"
+                    value={breakdownOverrides.discountLiters ?? formatNumber(reportCalculator.autoDiscountLiters, 2)}
+                    placeholder={formatNumber(reportCalculator.autoDiscountLiters, 2)}
+                    onChange={value => setBreakdownOverride('discountLiters', value)}
+                    disabled={!isReportEditing}
+                  />
+                  <CalcRow label={`По ${reportCalculator.regularPriceLabel}`} value={`${formatLiters(reportCalculator.regularLiters)} = ${formatCurrency(reportCalculator.regularAmount)}`} strong />
+                  <CalcRow label={`По ${reportCalculator.discountPriceLabel}`} value={`${formatLiters(reportCalculator.discountLiters)} = ${formatCurrency(reportCalculator.discountAmount)}`} strong />
+                </div>
+              </div>
+
+              <div className="border border-blue-200 rounded-lg overflow-hidden bg-blue-50/30">
+                <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-200 text-blue-900" style={{ fontSize: '13px', fontWeight: 700 }}>Касса</div>
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className={calcLabel} style={{ fontSize: '10px', fontWeight: 700 }}>Сумма 112/107</div>
+                      <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.totalRevenue)}</div>
+                    </div>
+                    <div>
+                      <div className={calcLabel} style={{ fontSize: '10px', fontWeight: 700 }}>Kaspi перевод</div>
+                      <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.kaspiTransfer)}</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reportKaspiQr" className="text-slate-600" style={{ fontSize: '12px' }}>Kaspi QR, ₸</Label>
+                    <Input
+                      id="reportKaspiQr"
+                      inputMode="decimal"
+                      value={kaspiQrInput}
+                      onChange={event => setDraftKaspiQr(event.target.value)}
+                      placeholder={formatNumber(reportCalculator.autoKaspiQR, 2)}
+                      disabled={!isReportEditing}
+                      className="h-8 bg-white border-[#d1d9e6] font-mono text-right"
+                      style={{ fontSize: '13px' }}
+                    />
+                    <div className="text-slate-500" style={{ fontSize: '11px' }}>Пусто = автоматически {formatCurrency(reportCalculator.autoKaspiQR)}</div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="serviceMemo" className="text-slate-600" style={{ fontSize: '12px' }}>Служебная записка, ₸</Label>
+                    <Input
+                      id="serviceMemo"
+                      inputMode="decimal"
+                      value={serviceMemoInput}
+                      onChange={event => setDraftServiceMemo(event.target.value)}
+                      placeholder="0.00"
+                      disabled={!isReportEditing}
+                      className="h-8 bg-white border-[#d1d9e6] font-mono text-right"
+                      style={{ fontSize: '13px' }}
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-blue-200">
+                    <div className="text-blue-800 uppercase tracking-[0.05em]" style={{ fontSize: '10px', fontWeight: 700 }}>К внесению в кассу</div>
+                    <div className="font-mono text-blue-950 mt-1" style={{ fontSize: '20px', fontWeight: 800 }}>{formatCurrency(reportCalculator.cashToDeposit)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg" style={{ fontSize: '12px' }}>
         <span className="text-amber-600 shrink-0 mt-0.5">ℹ</span>
         <span className="text-amber-800">
@@ -393,6 +823,44 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
     <div className={`rounded-lg border p-3 ${accent ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#d1d9e6]'}`}>
       <div className="text-slate-500" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
       <div className={`mt-1 font-mono ${accent ? 'text-blue-900' : 'text-slate-900'}`} style={{ fontSize: '16px', fontWeight: 700 }}>{value}</div>
+    </div>
+  );
+}
+
+function CalcRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="px-4 py-2.5 flex items-center justify-between gap-4">
+      <div className="text-slate-600" style={{ fontSize: '13px', fontWeight: strong ? 600 : 400 }}>{label}</div>
+      <div className={`font-mono text-right ${strong ? 'text-slate-950' : 'text-slate-700'}`} style={{ fontSize: '13px', fontWeight: strong ? 700 : 500 }}>{value}</div>
+    </div>
+  );
+}
+
+function CalcInputRow({
+  label,
+  value,
+  placeholder,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="px-4 py-2.5 flex items-center justify-between gap-4">
+      <div className="text-slate-600" style={{ fontSize: '13px' }}>{label}</div>
+      <Input
+        inputMode="decimal"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="h-8 w-36 bg-white border-[#d1d9e6] font-mono text-right"
+        style={{ fontSize: '13px' }}
+      />
     </div>
   );
 }
