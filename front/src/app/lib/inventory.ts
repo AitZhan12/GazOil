@@ -39,6 +39,33 @@ function ts(date: string, time: string): number {
 // Обнуление идёт последним, чтобы списать всё, что случилось в этот же момент.
 const KIND_ORDER: Record<InventoryEventKind, number> = { delivery: 0, shift: 1, reset: 2 };
 
+function lastResetBefore(resets: TankReset[], at: number): TankReset | undefined {
+  let found: TankReset | undefined;
+  for (const r of resets) {
+    const t = ts(r.date, r.time);
+    if (t >= at) break;
+    found = r;
+  }
+  return found;
+}
+
+function shiftLitersAfterReset(s: Shift, reset: TankReset | undefined): number {
+  const baseline = reset?.pumpReadings;
+  if (!baseline?.length) return s.totalLiters;
+
+  let liters = 0;
+  for (const p of s.pumps) {
+    const resetReading = baseline[p.pumpNumber - 1];
+    if (resetReading === undefined) {
+      liters += p.end - p.start;
+      continue;
+    }
+    const start = Math.max(p.start, resetReading);
+    if (p.end > start) liters += p.end - start;
+  }
+  return round2(liters);
+}
+
 /** Полная лента движения остатка: приходы, реализации смен и обнуления по времени. */
 export function buildInventoryTimeline(
   initialStock: number,
@@ -50,6 +77,7 @@ export function buildInventoryTimeline(
 ): InventoryTimeline {
   type Raw = Omit<InventoryEvent, 'balanceAfter' | 'negative' | 'overfill'>;
   const raw: Raw[] = [];
+  const sortedResets = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
 
   for (const d of deliveries) {
     raw.push({
@@ -59,9 +87,11 @@ export function buildInventoryTimeline(
     });
   }
   for (const s of shifts) {
+    const shiftEnd = ts(s.endDate, s.endTime);
+    const reset = lastResetBefore(sortedResets, shiftEnd);
     raw.push({
-      kind: 'shift', refId: s.id, at: ts(s.endDate, s.endTime),
-      date: s.endDate, time: s.endTime, delta: -s.totalLiters,
+      kind: 'shift', refId: s.id, at: shiftEnd,
+      date: s.endDate, time: s.endTime, delta: -shiftLitersAfterReset(s, reset),
       label: 'Реализация смены',
     });
   }
@@ -286,14 +316,12 @@ export function balanceAroundShift(opts: {
   shiftLiters: number;  // реализация этой смены
 }): { before: number; after: number } {
   const { initialStock, deliveries, otherShifts, resets = [], shiftEnd, shiftLiters } = opts;
+  const sortedResets = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
 
   // Последнее обнуление не позже конца смены — точка отсчёта.
-  let resetAt = -Infinity;
-  for (const r of resets) {
-    const t = ts(r.date, r.time);
-    if (t <= shiftEnd && t > resetAt) resetAt = t;
-  }
-  const hasReset = resetAt > -Infinity;
+  const reset = lastResetBefore(sortedResets, shiftEnd + 1);
+  const resetAt = reset ? ts(reset.date, reset.time) : -Infinity;
+  const hasReset = !!reset;
 
   let before = hasReset ? 0 : initialStock;
   for (const d of deliveries) {
@@ -302,7 +330,7 @@ export function balanceAroundShift(opts: {
   }
   for (const s of otherShifts) {
     const t = ts(s.endDate, s.endTime);
-    if (t <= shiftEnd && t > resetAt) before -= s.totalLiters;
+    if (t <= shiftEnd && t > resetAt) before -= shiftLitersAfterReset(s, reset);
   }
   before = round2(before);
   return { before, after: round2(before - shiftLiters) };
