@@ -103,19 +103,21 @@ export function ShiftJournal() {
         <div className="px-4 py-2.5 text-slate-500" style={{ fontSize: '13px' }}>Загрузка…</div>
       )}
       {/* Page header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Журнал смен</h1>
-          <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>
-            {filteredShifts.length} смен{filteredShifts.length === 1 ? 'а' : filteredShifts.length < 5 ? 'ы' : ''} за период
-          </p>
+      <div className="sticky top-12 lg:top-0 z-20 -mx-4 sm:-mx-6 -mt-2 px-4 sm:px-6 py-2 bg-[#f0f2f5]/95 backdrop-blur border-b border-[#d1d9e6]/70">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Журнал смен</h1>
+            <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>
+              {filteredShifts.length} смен{filteredShifts.length === 1 ? 'а' : filteredShifts.length < 5 ? 'ы' : ''} за период
+            </p>
+          </div>
+          <Link to="/shift/new">
+            <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 whitespace-nowrap shadow-sm shadow-blue-900/10" style={{ fontSize: '13px' }}>
+              <Plus className="size-3.5" />
+              Новая смена
+            </Button>
+          </Link>
         </div>
-        <Link to="/shift/new">
-          <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
-            <Plus className="size-3.5" />
-            Новая смена
-          </Button>
-        </Link>
       </div>
 
       {/* Filters bar */}
