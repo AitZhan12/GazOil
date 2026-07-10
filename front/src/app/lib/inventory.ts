@@ -130,12 +130,15 @@ export function buildInventoryTimeline(
   };
 }
 
-/** Сверка обнуления: физически прошло через колонки vs записано продано по сменам. */
+/** Сверка обнуления: продано по колонкам vs приход газа за цикл. */
 export interface ResetReconciliation {
-  physicalDispensed: number; // Σ (показание − база) по колонкам — прошло через счётчики
-  recordedSold: number;      // Σ литров смен за интервал
-  diff: number;              // physicalDispensed − recordedSold (минус = продали меньше, чем прошло)
-  withinTolerance: boolean;  // |diff| ≤ погрешности
+  physicalDispensed: number; // Σ (показание − база) по колонкам — продано за цикл
+  delivered: number;         // Σ приходов за цикл (+ начальный остаток до первого обнуления)
+  periodDiff: number;        // physicalDispensed − delivered за один цикл
+  cumulativeDiff: number;    // накопленная разница по всем циклам
+  recordedSold: number;      // deprecated alias для старого UI: равно delivered
+  diff: number;              // deprecated alias: равно cumulativeDiff
+  withinTolerance: boolean;  // true только когда накопленная разница равна нулю
 }
 
 // Σ показаний колонок одной смены (старт/конец) — суммируем по номерам колонок.
@@ -171,22 +174,22 @@ function reconBaseline(
 }
 
 /**
- * Сверяет каждое обнуление по ПОКАЗАНИЯМ счётчиков (не по времени), чтобы корректно
- * учитывать обнуление в любой момент, в т.ч. посреди смены. Физически прошло через
- * колонки = Σ показаний обнуления − база. Записано = сумма «срезов» смен, попавших в
- * диапазон показаний [база; обнуление] (смена на стыке учитывается ровно той частью,
- * что прошла до обнуления). Расхождение = непокрытые сменами литры (пропуски/недозапись).
- * База — предыдущее обнуление, для первого — стартовые показания самой ранней смены.
+ * Сверяет каждый цикл резервуара, который заканчивается обнулением с показаниями
+ * колонок. Продано = Σ показаний обнуления − база. Приход = все поставки после
+ * прошлого обнуления и до текущего включительно (+ начальный остаток для первого
+ * цикла). Разница = продано − приход; она копится от цикла к циклу.
  */
 export function reconcileResets(
   resets: TankReset[],
   shifts: Shift[],
-  tolerance = 0,
+  deliveries: GasDelivery[] = [],
+  initialStock = 0,
 ): Map<string, ResetReconciliation> {
   const result = new Map<string, ResetReconciliation>();
   const sorted = [...resets].sort((a, b) => ts(a.date, a.time) - ts(b.date, b.time));
   const firstShift = [...shifts].sort(
     (a, b) => ts(a.startDate, a.startTime) - ts(b.startDate, b.startTime))[0];
+  let cumulativeDiff = 0;
 
   sorted.forEach((reset, i) => {
     const readings = reset.pumpReadings ?? [];
@@ -199,21 +202,25 @@ export function reconcileResets(
     const rSum = readings.reduce((s, v) => s + (v ?? 0), 0);
 
     const physical = round2(rSum - bSum);
-    // Записано = Σ срезов смен, попавших в диапазон показаний [bSum; rSum].
-    let recorded = 0;
-    for (const s of shifts) {
-      const lo = Math.max(shiftStartSum(s, count), bSum);
-      const hi = Math.min(shiftEndSum(s, count), rSum);
-      if (hi > lo) recorded += hi - lo;
+    const from = sorted[i - 1] ? ts(sorted[i - 1].date, sorted[i - 1].time) : -Infinity;
+    const to = ts(reset.date, reset.time);
+    let delivered = i === 0 ? initialStock : 0;
+    for (const d of deliveries) {
+      const t = ts(d.date, d.time);
+      if (t > from && t <= to) delivered += d.liters;
     }
-    recorded = round2(recorded);
+    delivered = round2(delivered);
 
-    const diff = round2(physical - recorded);
+    const periodDiff = round2(physical - delivered);
+    cumulativeDiff = round2(cumulativeDiff + periodDiff);
     result.set(reset.id, {
       physicalDispensed: physical,
-      recordedSold: recorded,
-      diff,
-      withinTolerance: Math.abs(diff) <= tolerance,
+      delivered,
+      periodDiff,
+      cumulativeDiff,
+      recordedSold: delivered,
+      diff: cumulativeDiff,
+      withinTolerance: Math.abs(cumulativeDiff) < 0.005,
     });
   });
 

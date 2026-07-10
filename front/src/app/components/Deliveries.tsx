@@ -156,10 +156,10 @@ export function Deliveries() {
     return map;
   }, [timeline]);
 
-  // Сверка обнулений: разница показаний колонок vs литры смен за интервал.
+  // Сверка обнулений: продано по показаниям колонок vs приход газа за цикл.
   const reconByReset = useMemo(
-    () => reconcileResets(resets, shifts, tolerance),
-    [resets, shifts, tolerance],
+    () => reconcileResets(resets, shifts, deliveries, settings?.initialStockLiters ?? 0),
+    [resets, shifts, deliveries, settings?.initialStockLiters],
   );
   const resetDiscrepancies = useMemo(
     () => sortedResets
@@ -175,6 +175,7 @@ export function Deliveries() {
     () => (detailReset ? reconcileResetDetail(detailReset.id, resets, shifts) : null),
     [detailReset, resets, shifts],
   );
+  const detailRecon = detailReset ? reconByReset.get(detailReset.id) : undefined;
 
   const openDialog = (d?: GasDelivery) => {
     if (d) {
@@ -462,18 +463,19 @@ export function Deliveries() {
 
       {/* Расхождения по сверке обнулений */}
       {resetDiscrepancies.length > 0 && (
-        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '12px' }}>
+        <div className={`px-4 py-3 border rounded-lg ${resetDiscrepancies.some(x => (x.recon?.cumulativeDiff ?? 0) < 0) ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`} style={{ fontSize: '12px' }}>
           <div className="flex items-center gap-2 mb-1.5" style={{ fontWeight: 600 }}>
             <AlertTriangle className="size-4 shrink-0" />
-            Расхождения по показаниям колонок ({resetDiscrepancies.length})
+            Расхождения прихода и продаж ({resetDiscrepancies.length})
           </div>
           <ul className="space-y-1 pl-6 list-disc">
             {resetDiscrepancies.map(({ reset, recon }) => (
               <li key={reset.id}>
-                <span className="font-mono">{isoToRu(reset.date)} {reset.time}</span> — через колонки прошло{' '}
-                <span className="font-mono">{formatLiters(recon!.physicalDispensed)}</span>, по сменам продано{' '}
-                <span className="font-mono">{formatLiters(recon!.recordedSold)}</span>{' '}
-                (разница <span className="font-mono">{recon!.diff > 0 ? '+' : ''}{formatLiters(recon!.diff)}</span>)
+                <span className="font-mono">{isoToRu(reset.date)} {reset.time}</span> — продано по колонкам{' '}
+                <span className="font-mono">{formatLiters(recon!.physicalDispensed)}</span>, приход{' '}
+                <span className="font-mono">{formatLiters(recon!.delivered)}</span>{' '}
+                (за цикл <span className={`font-mono ${recon!.periodDiff < 0 ? 'text-red-700' : recon!.periodDiff > 0 ? 'text-emerald-700' : ''}`}>{recon!.periodDiff > 0 ? '+' : ''}{formatLiters(recon!.periodDiff)}</span>, накоплено{' '}
+                <span className={`font-mono ${recon!.cumulativeDiff < 0 ? 'text-red-700' : recon!.cumulativeDiff > 0 ? 'text-emerald-700' : ''}`}>{recon!.cumulativeDiff > 0 ? '+' : ''}{formatLiters(recon!.cumulativeDiff)}</span>)
               </li>
             ))}
           </ul>
@@ -530,11 +532,11 @@ export function Deliveries() {
                       <td className="px-4 py-2.5 text-right border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                         {recon ? (
                           <button type="button" onClick={() => setDetailReset(r)} className="text-right hover:opacity-70 transition-opacity" title="Открыть разбор сверки">
-                            <div className={`font-mono ${recon.withinTolerance ? 'text-slate-500' : 'text-red-600'}`} style={{ fontWeight: recon.withinTolerance ? 400 : 600 }}>
-                              {recon.diff > 0 ? '+' : ''}{formatLiters(recon.diff)}
+                            <div className={`font-mono ${recon.cumulativeDiff < 0 ? 'text-red-600' : recon.cumulativeDiff > 0 ? 'text-emerald-700' : 'text-slate-500'}`} style={{ fontWeight: recon.withinTolerance ? 400 : 600 }}>
+                              {recon.cumulativeDiff > 0 ? '+' : ''}{formatLiters(recon.cumulativeDiff)}
                             </div>
                             <div className="text-blue-500 underline" style={{ fontSize: '10px' }}>
-                              колонки {formatNumber(recon.physicalDispensed, 0)} · смены {formatNumber(recon.recordedSold, 0)} · разбор
+                              продано {formatNumber(recon.physicalDispensed, 0)} · приход {formatNumber(recon.delivered, 0)} · цикл {recon.periodDiff > 0 ? '+' : ''}{formatNumber(recon.periodDiff, 0)} · разбор
                             </div>
                           </button>
                         ) : <span className="text-slate-300">—</span>}
@@ -675,25 +677,28 @@ export function Deliveries() {
           {detail ? (
             <div className="space-y-3 py-2">
               {/* Итог */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="rounded-lg border border-[#d1d9e6] bg-[#f8fafc] p-2.5">
-                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Через колонки</div>
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Продано</div>
                   <div className="font-mono text-slate-900" style={{ fontSize: '15px', fontWeight: 700 }}>{formatLiters(detail.physicalDispensed)}</div>
                 </div>
                 <div className="rounded-lg border border-[#d1d9e6] bg-[#f8fafc] p-2.5">
-                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>По сменам</div>
-                  <div className="font-mono text-slate-900" style={{ fontSize: '15px', fontWeight: 700 }}>{formatLiters(detail.totalShiftLiters)}</div>
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Приход</div>
+                  <div className="font-mono text-slate-900" style={{ fontSize: '15px', fontWeight: 700 }}>{formatLiters(detailRecon?.delivered ?? 0)}</div>
                 </div>
-                <div className={`rounded-lg border p-2.5 ${Math.abs(detail.diff) > tolerance ? 'border-red-200 bg-red-50' : 'border-[#d1d9e6] bg-[#f8fafc]'}`}>
-                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Расхождение</div>
-                  <div className={`font-mono ${Math.abs(detail.diff) > tolerance ? 'text-red-700' : 'text-slate-900'}`} style={{ fontSize: '15px', fontWeight: 700 }}>{detail.diff > 0 ? '+' : ''}{formatLiters(detail.diff)}</div>
+                <div className={`rounded-lg border p-2.5 ${(detailRecon?.periodDiff ?? 0) < 0 ? 'border-red-200 bg-red-50' : (detailRecon?.periodDiff ?? 0) > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-[#d1d9e6] bg-[#f8fafc]'}`}>
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>За цикл</div>
+                  <div className={`font-mono ${(detailRecon?.periodDiff ?? 0) < 0 ? 'text-red-700' : (detailRecon?.periodDiff ?? 0) > 0 ? 'text-emerald-700' : 'text-slate-900'}`} style={{ fontSize: '15px', fontWeight: 700 }}>{(detailRecon?.periodDiff ?? 0) > 0 ? '+' : ''}{formatLiters(detailRecon?.periodDiff ?? 0)}</div>
+                </div>
+                <div className={`rounded-lg border p-2.5 ${(detailRecon?.cumulativeDiff ?? 0) < 0 ? 'border-red-200 bg-red-50' : (detailRecon?.cumulativeDiff ?? 0) > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-[#d1d9e6] bg-[#f8fafc]'}`}>
+                  <div className="text-slate-500" style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>Накоплено</div>
+                  <div className={`font-mono ${(detailRecon?.cumulativeDiff ?? 0) < 0 ? 'text-red-700' : (detailRecon?.cumulativeDiff ?? 0) > 0 ? 'text-emerald-700' : 'text-slate-900'}`} style={{ fontSize: '15px', fontWeight: 700 }}>{(detailRecon?.cumulativeDiff ?? 0) > 0 ? '+' : ''}{formatLiters(detailRecon?.cumulativeDiff ?? 0)}</div>
                 </div>
               </div>
 
               <p className="text-slate-500" style={{ fontSize: '11px' }}>
-                База: {detail.baselineLabel}. Сверка идёт по показаниям счётчиков: смена засчитывается срезом, попавшим в диапазон [база; обнуление],
-                поэтому смена, шедшая в момент обнуления, учитывается частью до обнуления (отметка «частично»). Расхождение = непокрытые сменами литры
-                (зазоры на стыках + хвост).
+                База: {detail.baselineLabel}. Продано берётся по трём показаниям колонок на момент обнуления. Для контроля ниже видно,
+                какие смены попали в диапазон [база; обнуление], включая частичные смены и зазоры на стыках.
               </p>
 
               <div className="border border-[#d1d9e6] rounded-lg overflow-hidden">
