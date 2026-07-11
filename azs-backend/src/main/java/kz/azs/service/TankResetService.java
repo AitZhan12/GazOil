@@ -3,7 +3,6 @@ package kz.azs.service;
 import kz.azs.domain.Station;
 import kz.azs.domain.TankReset;
 import kz.azs.domain.TankResetReading;
-import kz.azs.repo.StationRepository;
 import kz.azs.repo.TankResetRepository;
 import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.TankResetDto;
@@ -27,28 +26,29 @@ public class TankResetService {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final TankResetRepository resets;
-    private final StationRepository stations;
+    private final AuthService auth;
 
-    public TankResetService(TankResetRepository resets, StationRepository stations) {
+    public TankResetService(TankResetRepository resets, AuthService auth) {
         this.resets = resets;
-        this.stations = stations;
+        this.auth = auth;
     }
 
     @Transactional(readOnly = true)
     public List<TankResetDto> list() {
-        return resets.findAllByOrderByResetAtAsc().stream().map(this::toDto).toList();
+        return resets.findAllByStationIdOrderByResetAtAsc(auth.currentStation().getId()).stream()
+                .map(this::toDto).toList();
     }
 
     public TankResetDto create(TankResetDto dto) {
         TankReset r = new TankReset();
-        r.setStation(defaultStation());
+        r.setStation(auth.currentStation());
         apply(r, dto);
         addReadings(r, dto);
         return toDto(resets.save(r));
     }
 
     public TankResetDto update(Long id, TankResetDto dto) {
-        TankReset r = resets.findById(id)
+        TankReset r = resets.findByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Обнуление не найдено: " + id));
         apply(r, dto);
         // Полная замена показаний: чистим и сбрасываем в БД до вставки новых,
@@ -60,7 +60,8 @@ public class TankResetService {
     }
 
     public void delete(Long id) {
-        if (!resets.existsById(id)) {
+        Station station = auth.currentStation();
+        if (!resets.existsByIdAndStationId(id, station.getId())) {
             throw new NotFoundException("Обнуление не найдено: " + id);
         }
         resets.deleteById(id);
@@ -96,11 +97,6 @@ public class TankResetService {
                 r.getNote(),
                 pumps
         );
-    }
-
-    private Station defaultStation() {
-        return stations.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new NotFoundException("Станция по умолчанию не настроена"));
     }
 
     private static OffsetDateTime toUtc(String date, String time) {

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router';
 import { FileText, BarChart3, LayoutDashboard, Users, Settings as SettingsIcon, Fuel, Droplet, LogOut, Menu, X } from 'lucide-react';
-import { isAuthed, logout } from '../lib/auth';
+import { getCurrentUser, isAuthed, logout } from '../lib/auth';
 
 export function Root() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const currentUser = getCurrentUser();
 
   // Закрываем мобильное меню при смене маршрута.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
@@ -119,7 +120,7 @@ export function Root() {
             Выйти
           </button>
           <div className="px-3 text-slate-600" style={{ fontSize: '11px' }}>
-            3 колонки · 5 операторов
+            {currentUser.stationName ?? currentUser.username ?? 'GazOil'}
           </div>
         </div>
       </aside>

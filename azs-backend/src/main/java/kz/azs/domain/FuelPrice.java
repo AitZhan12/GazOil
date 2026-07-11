@@ -8,10 +8,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
-/**
- * Общие цены 107/112 (одна строка, id=1). При создании смены снапшотятся в её
- * {@link ShiftBreakdown}, чтобы прошлые смены не «поехали» при изменении цены.
- */
+/** Цены 107/112 конкретной газ-точки. При создании смены снапшотятся в её breakdown. */
 @Entity
 @Table(name = "fuel_price")
 @Getter @Setter @NoArgsConstructor
@@ -19,6 +16,10 @@ public class FuelPrice {
 
     @Id
     private Short id = 1;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "station_id", nullable = false)
+    private Station station;
 
     @Column(name = "discount_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal discountPrice = BigDecimal.ZERO;

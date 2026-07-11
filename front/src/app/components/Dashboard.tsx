@@ -3,10 +3,14 @@ import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+import { AlertTriangle, Download, FileText } from 'lucide-react';
+import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getShifts, getOperators } from '../lib/storage';
-import { formatNumber } from '../lib/calculations';
-import { Operator, Shift, ShiftType, SHIFT_TYPE_LABELS } from '../types';
+import { getDeliveries, getOperators, getSettings, getShifts, getTankResets } from '../lib/storage';
+import { formatLiters, formatNumber } from '../lib/calculations';
+import { buildInventoryTimeline } from '../lib/inventory';
+import { downloadExcel, printPdf, ExportCell } from '../lib/export';
+import { AppSettings, GasDelivery, Operator, Shift, ShiftType, SHIFT_TYPE_LABELS, TankReset } from '../types';
 
 const SHIFT_TYPE_COLORS: Record<ShiftType, string> = {
   full: '#2563eb',
@@ -22,15 +26,21 @@ export function Dashboard() {
 
   const [operators, setOperators] = useState<Operator[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [deliveries, setDeliveries] = useState<GasDelivery[]>([]);
+  const [tankResets, setTankResets] = useState<TankReset[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getOperators(), getShifts()])
-      .then(([ops, shs]) => {
+    Promise.all([getOperators(), getShifts(), getDeliveries(), getTankResets(), getSettings()])
+      .then(([ops, shs, dels, resets, cfg]) => {
         if (cancelled) return;
         setOperators(ops);
         setShifts(shs);
+        setDeliveries(dels);
+        setTankResets(resets);
+        setSettings(cfg);
       })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Ошибка загрузки'); });
     return () => { cancelled = true; };
@@ -60,14 +70,38 @@ export function Dashboard() {
   const kpi = useMemo(() => {
     const count = monthShifts.length;
     const liters = monthShifts.reduce((s, x) => s + x.totalLiters, 0);
+    const revenue = monthShifts.reduce((s, x) => s + x.totalRevenue, 0);
+    const cash = monthShifts.reduce((s, x) => s + x.totalCash, 0);
+    const kaspiQR = monthShifts.reduce((s, x) => s + (x.kaspiQR ?? 0), 0);
+    const kaspiTransfer = monthShifts.reduce((s, x) => s + (x.kaspiTransfer ?? 0), 0);
     const payroll = monthShifts.reduce((s, x) => s + (x.baseSalary ?? 0) + (x.bonus ?? 0), 0);
     return {
       count,
       liters,
+      revenue,
+      cash,
+      kaspiQR,
+      kaspiTransfer,
       payroll,
       avgLiters: count ? liters / count : 0,
+      avgRevenue: count ? revenue / count : 0,
+      beforeExpenses: revenue - payroll,
     };
   }, [monthShifts]);
+
+  const monthDeliveries = useMemo(
+    () => deliveries.filter(d => d.date.substring(0, 7) === selectedMonth),
+    [deliveries, selectedMonth]
+  );
+
+  const inventory = useMemo(() => buildInventoryTimeline(
+    settings?.initialStockLiters ?? 0,
+    settings?.tankCapacityLiters ?? 0,
+    deliveries,
+    shifts,
+    tankResets,
+    settings?.measurementToleranceLiters ?? 0,
+  ), [settings, deliveries, shifts, tankResets]);
 
   // Продажи по дням месяца (литры по числам).
   const byDay = useMemo(() => {
@@ -127,9 +161,54 @@ export function Dashboard() {
       .slice(0, 8);
   }, [monthShifts, operators]);
 
+  const ownerRows = useMemo(() => {
+    const rows: ExportCell[][] = [
+      ['Показатель', selectedMonthLabel],
+      ['Смен', kpi.count],
+      ['Реализация, л', kpi.liters.toFixed(2)],
+      ['Выручка, ₸', kpi.revenue.toFixed(2)],
+      ['Наличные, ₸', kpi.cash.toFixed(2)],
+      ['Kaspi QR, ₸', kpi.kaspiQR.toFixed(2)],
+      ['Kaspi перевод, ₸', kpi.kaspiTransfer.toFixed(2)],
+      ['Фонд ЗП, ₸', kpi.payroll.toFixed(2)],
+      ['До расходов, ₸', kpi.beforeExpenses.toFixed(2)],
+      ['Приход газа, л', monthDeliveries.reduce((s, d) => s + d.liters, 0).toFixed(2)],
+      ['Текущий остаток, л', inventory.currentBalance.toFixed(2)],
+      ['Предупреждения резервуара', inventory.warnings.length],
+      [],
+      ['Топ операторов', 'Литры'],
+      ...topOperators.map(op => [op.name, op.liters]),
+    ];
+    return rows;
+  }, [inventory, kpi, monthDeliveries, selectedMonthLabel, topOperators]);
+
   const hasData = monthShifts.length > 0;
   const fmtL = (v: number) => `${formatNumber(v, 0)} л`;
   const fmtMoney = (v: number) => `${formatNumber(v, 0)} ₸`;
+
+  const handleExcelExport = () => {
+    downloadExcel(ownerRows, `Дашборд_${selectedMonthLabel}.xls`);
+  };
+
+  const handlePdfExport = () => {
+    const warnings = inventory.warnings.slice(-5).map(w => `
+      <tr><td>${w.date} ${w.time}</td><td>${w.label}</td><td class="num">${formatLiters(w.balanceAfter)}</td></tr>`).join('');
+    printPdf(`Дашборд ${selectedMonthLabel}`, `
+      <h1>Дашборд владельца</h1>
+      <p>Период: ${selectedMonthLabel}</p>
+      <table>
+        <tr><th>Показатель</th><th class="num">Значение</th></tr>
+        ${ownerRows.filter(row => row.length === 2 && row[0] !== 'Топ операторов').map(row => `
+          <tr><td>${row[0]}</td><td class="num">${row[1]}</td></tr>`).join('')}
+      </table>
+      <h2>Топ операторов</h2>
+      <table>
+        <tr><th>Оператор</th><th class="num">Литры</th></tr>
+        ${topOperators.map(op => `<tr><td>${op.name}</td><td class="num">${formatNumber(op.liters, 0)}</td></tr>`).join('')}
+      </table>
+      ${warnings ? `<h2>Последние предупреждения резервуара</h2><table><tr><th>Дата</th><th>Событие</th><th class="num">Остаток</th></tr>${warnings}</table>` : ''}
+    `);
+  };
 
   return (
     <div className="space-y-4">
@@ -143,27 +222,54 @@ export function Dashboard() {
           <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>Дашборд</h1>
           <p className="text-slate-500 mt-0.5" style={{ fontSize: '12px' }}>Продажи и смены за {selectedMonthLabel}</p>
         </div>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="h-8 w-40 sm:w-52 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(option => (
-              <SelectItem key={option.value} value={option.value} style={{ fontSize: '13px' }}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="h-8 w-40 sm:w-52 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(option => (
+                <SelectItem key={option.value} value={option.value} style={{ fontSize: '13px' }}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={handleExcelExport} variant="outline" className="gap-1.5 h-8 px-3 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
+            <Download className="size-3.5" />
+            Excel
+          </Button>
+          <Button onClick={handlePdfExport} className="gap-1.5 h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white" style={{ fontSize: '13px' }}>
+            <FileText className="size-3.5" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Смен" value={String(kpi.count)} />
+        <KpiCard label="Выручка" value={fmtMoney(kpi.revenue)} accent />
         <KpiCard label="Реализация" value={fmtL(kpi.liters)} />
-        <KpiCard label="Фонд ЗП" value={fmtMoney(kpi.payroll)} accent />
-        <KpiCard label="Средняя на смену" value={fmtL(Math.round(kpi.avgLiters))} />
+        <KpiCard label="До расходов" value={fmtMoney(kpi.beforeExpenses)} />
       </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Наличные" value={fmtMoney(kpi.cash)} />
+        <KpiCard label="Kaspi QR" value={fmtMoney(kpi.kaspiQR)} />
+        <KpiCard label="Фонд ЗП" value={fmtMoney(kpi.payroll)} />
+        <KpiCard label="Остаток газа" value={formatLiters(inventory.currentBalance)} danger={inventory.currentBalance < 0} />
+      </div>
+
+      {inventory.warnings.length > 0 && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-red-800" style={{ fontSize: '12px' }}>
+          <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+          <div>
+            <div style={{ fontWeight: 700 }}>Есть предупреждения по резервуару: {inventory.warnings.length}</div>
+            <div className="mt-0.5 text-red-700">Проверьте раздел «Приход газа»: остаток ушёл в минус или превышен объём резервуара.</div>
+          </div>
+        </div>
+      )}
 
       {!hasData ? (
         <div className="bg-white border border-[#d1d9e6] rounded-lg p-12 text-center">
@@ -230,11 +336,11 @@ export function Dashboard() {
   );
 }
 
-function KpiCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function KpiCard({ label, value, accent, danger }: { label: string; value: string; accent?: boolean; danger?: boolean }) {
   return (
-    <div className={`rounded-lg border p-3.5 ${accent ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#d1d9e6]'}`}>
+    <div className={`rounded-lg border p-3.5 ${danger ? 'bg-red-50 border-red-200' : accent ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#d1d9e6]'}`}>
       <div className="text-slate-500" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
-      <div className={`mt-1.5 font-mono ${accent ? 'text-blue-900' : 'text-slate-900'}`} style={{ fontSize: '18px', fontWeight: 700 }}>{value}</div>
+      <div className={`mt-1.5 font-mono ${danger ? 'text-red-700' : accent ? 'text-blue-900' : 'text-slate-900'}`} style={{ fontSize: '18px', fontWeight: 700 }}>{value}</div>
     </div>
   );
 }

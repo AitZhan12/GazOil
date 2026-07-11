@@ -4,11 +4,11 @@ import kz.azs.domain.FuelPrice;
 import kz.azs.domain.FuelReading;
 import kz.azs.domain.Operator;
 import kz.azs.domain.SalaryConfig;
+import kz.azs.domain.Station;
 import kz.azs.domain.Shift;
 import kz.azs.domain.ShiftBreakdown;
 import kz.azs.repo.OperatorRepository;
 import kz.azs.repo.ShiftRepository;
-import kz.azs.repo.StationRepository;
 import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.PumpReadingDto;
 import kz.azs.web.dto.ShiftDto;
@@ -28,26 +28,26 @@ public class ShiftService {
 
     private final ShiftRepository shifts;
     private final OperatorRepository operators;
-    private final StationRepository stations;
     private final SettingsService settings;
     private final FuelPriceService fuelPrices;
     private final AzsMapper mapper;
+    private final AuthService auth;
 
     public ShiftService(ShiftRepository shifts, OperatorRepository operators,
-                        StationRepository stations, SettingsService settings,
-                        FuelPriceService fuelPrices, AzsMapper mapper) {
+                        SettingsService settings, FuelPriceService fuelPrices,
+                        AzsMapper mapper, AuthService auth) {
         this.shifts = shifts;
         this.operators = operators;
-        this.stations = stations;
         this.settings = settings;
         this.fuelPrices = fuelPrices;
         this.mapper = mapper;
+        this.auth = auth;
     }
 
     @Transactional(readOnly = true)
     public List<ShiftDto> list() {
         SalaryConfig config = settings.requireConfig();
-        return shifts.findAllByOrderByStartedAtDesc().stream()
+        return shifts.findAllByStationIdOrderByStartedAtDesc(auth.currentStation().getId()).stream()
                 .map(s -> mapper.toDto(s, config)).toList();
     }
 
@@ -58,8 +58,7 @@ public class ShiftService {
 
     public ShiftDto create(ShiftDto dto) {
         Shift shift = new Shift();
-        shift.setStation(stations.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new NotFoundException("Станция по умолчанию не настроена")));
+        shift.setStation(auth.currentStation());
         apply(shift, dto);
         // Цены 107/112 владелец в форме не вводит — снапшотим из настроек на момент
         // создания, чтобы будущая правка цены не «двигала» эту смену.
@@ -81,7 +80,8 @@ public class ShiftService {
     }
 
     public void delete(Long id) {
-        if (!shifts.existsById(id)) {
+        Station station = auth.currentStation();
+        if (!shifts.existsByIdAndStationId(id, station.getId())) {
             throw new NotFoundException("Смена не найдена: " + id);
         }
         shifts.deleteById(id);
@@ -136,7 +136,7 @@ public class ShiftService {
     }
 
     private Shift load(Long id) {
-        return shifts.findWithDetailsById(id)
+        return shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Смена не найдена: " + id));
     }
 
@@ -147,7 +147,7 @@ public class ShiftService {
         } catch (NumberFormatException e) {
             throw new NotFoundException(label + " не найден: " + id);
         }
-        return operators.findById(opId)
+        return operators.findByIdAndStationId(opId, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException(label + " не найден: " + id));
     }
 

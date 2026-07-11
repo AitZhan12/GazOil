@@ -16,7 +16,15 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
     List<Shift> findAllByOrderByStartedAtDesc();
 
     @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
+    List<Shift> findAllByStationIdOrderByStartedAtDesc(Long stationId);
+
+    @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
     Optional<Shift> findWithDetailsById(Long id);
+
+    @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
+    Optional<Shift> findWithDetailsByIdAndStationId(Long id, Long stationId);
+
+    boolean existsByIdAndStationId(Long id, Long stationId);
 
     /**
      * Смены, чей интервал пересекается с [start, end). Касание встык

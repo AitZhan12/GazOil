@@ -1,15 +1,22 @@
 import { AppSettings, FuelPrice, GasDelivery, Operator, Shift, TankReset } from '../types';
+import { getAuthToken, logout } from './auth';
 
 // База API бэка (Spring Boot). Можно переопределить через VITE_API_URL.
 const API_BASE: string =
   (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8080/api';
 
 async function http<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'X-Auth-Token': token } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   if (!res.ok) {
+    if (res.status === 401) logout();
     let message = `Ошибка запроса (${res.status})`;
     try {
       const body = await res.json();

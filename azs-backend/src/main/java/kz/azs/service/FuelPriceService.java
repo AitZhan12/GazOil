@@ -2,6 +2,7 @@ package kz.azs.service;
 
 import kz.azs.domain.FuelPrice;
 import kz.azs.repo.FuelPriceRepository;
+import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.FuelPriceDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,24 +17,27 @@ import java.time.ZoneOffset;
 public class FuelPriceService {
 
     private final FuelPriceRepository prices;
+    private final AuthService auth;
 
-    public FuelPriceService(FuelPriceRepository prices) {
+    public FuelPriceService(FuelPriceRepository prices, AuthService auth) {
         this.prices = prices;
+        this.auth = auth;
     }
 
     /** Доменная строка — нужна сервису смен для снапшота цены в новую смену. */
     @Transactional(readOnly = true)
     public FuelPrice requireCurrent() {
-        return prices.requireSingle();
+        return prices.findByStationId(auth.currentStation().getId())
+                .orElseThrow(() -> new NotFoundException("Цены топлива не настроены"));
     }
 
     @Transactional(readOnly = true)
     public FuelPriceDto get() {
-        return toDto(prices.requireSingle());
+        return toDto(requireCurrent());
     }
 
     public FuelPriceDto update(FuelPriceDto dto) {
-        FuelPrice p = prices.requireSingle();
+        FuelPrice p = requireCurrent();
         p.setDiscountPrice(nz(dto.discountPrice()));
         p.setBasePrice(nz(dto.basePrice()));
         p.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));

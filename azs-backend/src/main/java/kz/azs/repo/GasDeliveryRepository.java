@@ -8,4 +8,10 @@ import java.util.List;
 public interface GasDeliveryRepository extends JpaRepository<GasDelivery, Long> {
 
     List<GasDelivery> findAllByOrderByDeliveredAtAsc();
+
+    List<GasDelivery> findAllByStationIdOrderByDeliveredAtAsc(Long stationId);
+
+    java.util.Optional<GasDelivery> findByIdAndStationId(Long id, Long stationId);
+
+    boolean existsByIdAndStationId(Long id, Long stationId);
 }

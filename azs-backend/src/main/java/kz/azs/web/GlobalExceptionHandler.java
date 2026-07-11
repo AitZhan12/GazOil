@@ -15,6 +15,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<Map<String, String>> unauthorized(UnauthorizedException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
+    }
+
     @ExceptionHandler({IllegalArgumentException.class})
     public ResponseEntity<Map<String, String>> badRequest(RuntimeException e) {
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

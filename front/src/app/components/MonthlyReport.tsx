@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Download, FileText, Pencil, Save } from 'lucide-react';
+import { Download, FileText, Pencil, Printer, Save } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { getShifts, getOperators } from '../lib/storage';
 import { formatCurrency, formatLiters, formatNumber, round2 } from '../lib/calculations';
+import { downloadExcel, printPdf } from '../lib/export';
 import { MonthlyOperatorStats, Operator, Shift, SHIFT_TYPE_LABELS } from '../types';
 
 const ALL = 'all';
@@ -334,19 +335,6 @@ export function MonthlyReport() {
     return d && m && y ? `${d}.${m}.${y}` : iso;
   };
 
-  const downloadCsv = (rows: (string | number)[][], filename: string) => {
-    const csv = rows.map(row => row.join(',')).join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const downloadWord = (html: string, filename: string) => {
     const doc = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
@@ -431,7 +419,7 @@ export function MonthlyReport() {
         (selectedStat?.bonus ?? 0).toFixed(0),
         (selectedStat?.totalPayout ?? 0).toFixed(0),
       ]);
-      downloadCsv([headers, ...rows], `Расчёт_${selectedOperatorName}_${selectedMonthLabel}.csv`);
+      downloadExcel([headers, ...rows], `Расчет_${selectedOperatorName}_${selectedMonthLabel}.xls`);
       return;
     }
 
@@ -463,7 +451,59 @@ export function MonthlyReport() {
       totals.bonus.toFixed(0),
       totals.totalPayout.toFixed(0),
     ]);
-    downloadCsv([headers, ...rows], `Зарплатный_акт_${selectedMonthLabel}.csv`);
+    downloadExcel([headers, ...rows], `Зарплатный_акт_${selectedMonthLabel}.xls`);
+  };
+
+  const handlePdfExport = () => {
+    const title = isSingle ? `Расчет по оператору ${selectedOperatorName}` : 'Зарплатный акт';
+    const rowsHtml = isSingle
+      ? operatorShifts.map(s => `
+          <tr>
+            <td>${formatDate(s.startDate)}</td>
+            <td>${SHIFT_TYPE_LABELS[s.shiftType]}</td>
+            <td class="num">${formatLiters(s.totalLiters)}</td>
+            <td class="num">${formatLiters(s.voucherLiters)}</td>
+            <td class="num">${formatCurrency(s.baseSalary ?? 0)}</td>
+            <td class="num">${formatCurrency(s.bonus ?? 0)}</td>
+            <td class="num">${formatCurrency((s.baseSalary ?? 0) + (s.bonus ?? 0))}</td>
+          </tr>`).join('')
+      : operatorStats.map(stat => `
+          <tr>
+            <td>${stat.operatorName}</td>
+            <td class="num">${stat.shiftsCount}</td>
+            <td class="num">${formatLiters(stat.totalLiters)}</td>
+            <td class="num">${formatLiters(stat.voucherLiters)}</td>
+            <td class="num">${formatCurrency(stat.baseSalary)}</td>
+            <td class="num">${formatCurrency(stat.bonus)}</td>
+            <td class="num">${formatCurrency(stat.totalPayout)}</td>
+          </tr>`).join('');
+    const total = isSingle ? selectedStat : totals;
+
+    printPdf(`${title} ${selectedMonthLabel}`, `
+      <h1>${title}</h1>
+      <p>Период: ${selectedMonthLabel}${isSingle ? ` · ${selectedOperatorName}` : ''}</p>
+      <table>
+        <tr>
+          <th>${isSingle ? 'Дата' : 'Оператор'}</th>
+          <th>${isSingle ? 'Тип' : 'Смен'}</th>
+          <th class="num">Реализация</th>
+          <th class="num">Талоны</th>
+          <th class="num">ЗП база</th>
+          <th class="num">Бонус</th>
+          <th class="num">К выплате</th>
+        </tr>
+        ${rowsHtml}
+        <tr class="total">
+          <td>ИТОГО</td>
+          <td class="num">${total?.shiftsCount ?? 0}</td>
+          <td class="num">${formatLiters(total?.totalLiters ?? 0)}</td>
+          <td class="num">${formatLiters(total?.voucherLiters ?? 0)}</td>
+          <td class="num">${formatCurrency(total?.baseSalary ?? 0)}</td>
+          <td class="num">${formatCurrency(total?.bonus ?? 0)}</td>
+          <td class="num">${formatCurrency(total?.totalPayout ?? 0)}</td>
+        </tr>
+      </table>
+    `);
   };
 
   const isSingle = selectedOperator !== ALL;
@@ -519,7 +559,11 @@ export function MonthlyReport() {
           </Select>
           <Button onClick={handleExport} disabled={!hasData} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8 px-3" style={{ fontSize: '13px' }}>
             <Download className="size-3.5" />
-            CSV
+            Excel
+          </Button>
+          <Button onClick={handlePdfExport} disabled={!hasData} variant="outline" className="gap-1.5 h-8 px-3 border-[#d1d9e6] bg-white" style={{ fontSize: '13px' }}>
+            <Printer className="size-3.5" />
+            PDF
           </Button>
         </div>
       </div>

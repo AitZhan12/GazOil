@@ -4,7 +4,6 @@ import kz.azs.domain.BonusTier;
 import kz.azs.domain.SalaryConfig;
 import kz.azs.domain.Station;
 import kz.azs.repo.SalaryConfigRepository;
-import kz.azs.repo.StationRepository;
 import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.BonusTierDto;
 import kz.azs.web.dto.SettingsDto;
@@ -21,17 +20,17 @@ import java.util.List;
 public class SettingsService {
 
     private final SalaryConfigRepository configs;
-    private final StationRepository stations;
+    private final AuthService auth;
 
-    public SettingsService(SalaryConfigRepository configs, StationRepository stations) {
+    public SettingsService(SalaryConfigRepository configs, AuthService auth) {
         this.configs = configs;
-        this.stations = stations;
+        this.auth = auth;
     }
 
     /** Доменный конфиг — нужен расчёту ЗП/бонуса в мапере. */
     @Transactional(readOnly = true)
     public SalaryConfig requireConfig() {
-        return configs.findFirstByOrderByIdAsc()
+        return configs.findByStationId(auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Настройки зарплаты не инициализированы"));
     }
 
@@ -41,9 +40,10 @@ public class SettingsService {
     }
 
     public SettingsDto update(SettingsDto dto) {
-        SalaryConfig config = configs.findFirstByOrderByIdAsc().orElseGet(() -> {
+        Station station = auth.currentStation();
+        SalaryConfig config = configs.findByStationId(station.getId()).orElseGet(() -> {
             SalaryConfig c = new SalaryConfig();
-            c.setStation(defaultStation());
+            c.setStation(station);
             return c;
         });
 
@@ -85,11 +85,6 @@ public class SettingsService {
                 c.getDefaultDiscountPrice(), c.getDefaultBasePrice(),
                 c.getInitialStockLiters(), c.getTankCapacityLiters(),
                 c.getMeasurementToleranceLiters(), tiers);
-    }
-
-    private Station defaultStation() {
-        return stations.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new NotFoundException("Станция по умолчанию не настроена"));
     }
 
     private static BigDecimal nz(BigDecimal v) {

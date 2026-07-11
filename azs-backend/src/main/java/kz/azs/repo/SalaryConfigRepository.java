@@ -10,4 +10,7 @@ public interface SalaryConfigRepository extends JpaRepository<SalaryConfig, Long
 
     @EntityGraph(attributePaths = {"tiers"})
     Optional<SalaryConfig> findFirstByOrderByIdAsc();
+
+    @EntityGraph(attributePaths = {"tiers"})
+    Optional<SalaryConfig> findByStationId(Long stationId);
 }

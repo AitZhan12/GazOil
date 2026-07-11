@@ -3,7 +3,6 @@ package kz.azs.service;
 import kz.azs.domain.GasDelivery;
 import kz.azs.domain.Station;
 import kz.azs.repo.GasDeliveryRepository;
-import kz.azs.repo.StationRepository;
 import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.GasDeliveryDto;
 import org.springframework.stereotype.Service;
@@ -25,34 +24,36 @@ public class GasDeliveryService {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final GasDeliveryRepository deliveries;
-    private final StationRepository stations;
+    private final AuthService auth;
 
-    public GasDeliveryService(GasDeliveryRepository deliveries, StationRepository stations) {
+    public GasDeliveryService(GasDeliveryRepository deliveries, AuthService auth) {
         this.deliveries = deliveries;
-        this.stations = stations;
+        this.auth = auth;
     }
 
     @Transactional(readOnly = true)
     public List<GasDeliveryDto> list() {
-        return deliveries.findAllByOrderByDeliveredAtAsc().stream().map(this::toDto).toList();
+        return deliveries.findAllByStationIdOrderByDeliveredAtAsc(auth.currentStation().getId()).stream()
+                .map(this::toDto).toList();
     }
 
     public GasDeliveryDto create(GasDeliveryDto dto) {
         GasDelivery d = new GasDelivery();
-        d.setStation(defaultStation());
+        d.setStation(auth.currentStation());
         apply(d, dto);
         return toDto(deliveries.save(d));
     }
 
     public GasDeliveryDto update(Long id, GasDeliveryDto dto) {
-        GasDelivery d = deliveries.findById(id)
+        GasDelivery d = deliveries.findByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Поставка не найдена: " + id));
         apply(d, dto);
         return toDto(deliveries.save(d));
     }
 
     public void delete(Long id) {
-        if (!deliveries.existsById(id)) {
+        Station station = auth.currentStation();
+        if (!deliveries.existsByIdAndStationId(id, station.getId())) {
             throw new NotFoundException("Поставка не найдена: " + id);
         }
         deliveries.deleteById(id);
@@ -80,11 +81,6 @@ public class GasDeliveryService {
                 d.getSupplier(),
                 d.getNote()
         );
-    }
-
-    private Station defaultStation() {
-        return stations.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new NotFoundException("Станция по умолчанию не настроена"));
     }
 
     private static OffsetDateTime toUtc(String date, String time) {
