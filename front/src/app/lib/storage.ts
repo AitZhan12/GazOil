@@ -1,4 +1,4 @@
-import { AppSettings, FuelPrice, GasDelivery, Operator, Shift, TankReset } from '../types';
+import { AppSettings, FuelPrice, GasDelivery, Operator, Shift, TankReset, WaterRecord } from '../types';
 import { getAuthToken, logout } from './auth';
 
 // База API бэка (Spring Boot). Можно переопределить через VITE_API_URL.
@@ -80,6 +80,27 @@ export function updateShift(id: string, shift: Shift): Promise<Shift> {
 export function deleteShift(id: string): Promise<void> {
   return http<void>(`/shifts/${id}`, { method: 'DELETE' });
 }
+
+export function setShiftCashCollected(id: string, cashCollected: boolean): Promise<Shift> {
+  return http<Shift>(`/shifts/${id}/cash-collected`, {
+    method: 'PATCH',
+    body: JSON.stringify({ cashCollected }),
+  });
+}
+
+// ---- Журнал воды ----
+
+export function getWaterRecords(): Promise<WaterRecord[]> { return http<WaterRecord[]>('/water-records'); }
+
+export function addWaterRecord(record: Omit<WaterRecord, 'id' | 'balanceQuantity'>): Promise<WaterRecord> {
+  return http<WaterRecord>('/water-records', { method: 'POST', body: JSON.stringify(record) });
+}
+
+export function updateWaterRecord(id: string, record: Omit<WaterRecord, 'id' | 'balanceQuantity'>): Promise<WaterRecord> {
+  return http<WaterRecord>(`/water-records/${id}`, { method: 'PUT', body: JSON.stringify(record) });
+}
+
+export function deleteWaterRecord(id: string): Promise<void> { return http<void>(`/water-records/${id}`, { method: 'DELETE' }); }
 
 // ---- Настройки (ставки ЗП, цены по умолчанию, ступени бонуса) ----
 

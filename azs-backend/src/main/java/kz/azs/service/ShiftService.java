@@ -87,6 +87,12 @@ public class ShiftService {
         shifts.deleteById(id);
     }
 
+    public ShiftDto setCashCollected(Long id, boolean collected) {
+        Shift shift = load(id);
+        shift.setCashCollected(collected);
+        return mapper.toDto(shifts.save(shift), settings.requireConfig());
+    }
+
     /** Переносит сырые поля DTO в сущность (операторы, время, колонки, разбивка). */
     private void apply(Shift shift, ShiftDto dto) {
         shift.setOperator(operatorRef(dto.operatorId(), "Оператор"));

@@ -37,9 +37,16 @@ public class ShiftController {
         return service.update(id, dto);
     }
 
+    @PatchMapping("/{id}/cash-collected")
+    public ShiftDto setCashCollected(@PathVariable Long id, @RequestBody CashCollectedRequest request) {
+        return service.setCashCollected(id, request.cashCollected());
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
         service.delete(id);
     }
+
+    public record CashCollectedRequest(boolean cashCollected) {}
 }

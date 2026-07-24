@@ -84,6 +84,7 @@ public class AzsMapper {
                 end.toLocalDate().toString(),
                 end.toLocalTime().format(TIME),
                 shift.getShiftType(),
+                shift.isCashCollected(),
                 pumps,
                 nz(b.getTalonyLiters()),
                 nz(b.getCardLiters()),

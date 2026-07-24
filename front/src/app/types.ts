@@ -29,6 +29,7 @@ export interface Shift {
   endDate: string;
   endTime: string;
   shiftType: ShiftType;
+  cashCollected: boolean;
   pumps: PumpReading[];
   
   // Ввод владельца — только литры и безнал
@@ -56,6 +57,17 @@ export interface Shift {
   baseSalary: number;   // ставка по типу смены
   bonus: number;        // ступенчатый бонус за объём
   payout: number;       // итого за смену = ставка + бонус
+}
+
+export interface WaterRecord {
+  id: string;
+  operatorId: string;
+  date: string;
+  time: string;
+  receivedQuantity: number;
+  deliveryQuantity: number;
+  soldQuantity: number;
+  balanceQuantity: number;
 }
 
 // Общие цены 107/112 (раздел «Настройки»).

@@ -32,6 +32,7 @@ export function Root() {
     { path: '/journal', label: 'Журнал смен', icon: FileText },
     { path: '/report', label: 'Месячный отчёт', icon: BarChart3 },
     { path: '/deliveries', label: 'Приход газа', icon: Droplet },
+    { path: '/water', label: 'Журнал воды', icon: Droplet },
     { path: '/operators', label: 'Операторы', icon: Users },
     { path: '/settings', label: 'Настройки', icon: SettingsIcon },
   ];

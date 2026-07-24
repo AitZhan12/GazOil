@@ -43,6 +43,10 @@ public class Shift {
     @Column(columnDefinition = "text")
     private String note;
 
+    /** Владелец подтвердил, что наличные по смене забраны. */
+    @Column(name = "cash_collected", nullable = false)
+    private boolean cashCollected = false;
+
     @OneToMany(mappedBy = "shift", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FuelReading> readings = new ArrayList<>();
 

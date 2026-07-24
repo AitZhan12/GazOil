@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Plus, Pencil, Trash2, Layers, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Layers, AlertTriangle, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getShifts, getOperators, deleteShift } from '../lib/storage';
+import { getShifts, getOperators, deleteShift, setShiftCashCollected } from '../lib/storage';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { formatCurrency, formatLiters } from '../lib/calculations';
 import { Operator, Shift, SHIFT_TYPE_LABELS } from '../types';
 
@@ -18,6 +19,8 @@ export function ShiftJournal() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [collectionShift, setCollectionShift] = useState<Shift | null>(null);
+  const [updatingCollection, setUpdatingCollection] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +83,18 @@ export function ShiftJournal() {
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Не удалось удалить смену');
     }
+  };
+
+  const confirmCollection = async () => {
+    if (!collectionShift) return;
+    setUpdatingCollection(true);
+    try {
+      const updated = await setShiftCashCollected(collectionShift.id, !collectionShift.cashCollected);
+      setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
+      setCollectionShift(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось обновить инкассацию');
+    } finally { setUpdatingCollection(false); }
   };
 
   const getOperatorName = (id: string) => {
@@ -168,7 +183,7 @@ export function ShiftJournal() {
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[760px]">
+          <table className="w-full border-collapse min-w-[860px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -188,6 +203,9 @@ export function ShiftJournal() {
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Выручка (₸)
+                </th>
+                <th className="px-4 py-2.5 text-center text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  Инкассация
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   &nbsp;
@@ -241,6 +259,13 @@ export function ShiftJournal() {
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>
                     {formatCurrency(shift.totalRevenue)}
                   </td>
+                  <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
+                    <button type="button" onClick={() => setCollectionShift(shift)}
+                      aria-label={shift.cashCollected ? 'Отменить отметку инкассации' : 'Отметить инкассацию'}
+                      className={`inline-flex size-5 items-center justify-center rounded border transition-colors ${shift.cashCollected ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700' : 'border-slate-300 text-transparent hover:border-blue-500 hover:bg-blue-50'}`}>
+                      <Check className="size-3.5" strokeWidth={3} />
+                    </button>
+                  </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Link to={`/shift/${shift.id}`}>
@@ -283,6 +308,7 @@ export function ShiftJournal() {
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatCurrency(totalRevenue)}
                 </td>
+                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
                 <td className="px-4 py-2.5" />
               </tr>
             </tfoot>
@@ -290,6 +316,22 @@ export function ShiftJournal() {
           </div>
         </div>
       )}
+      <AlertDialog open={!!collectionShift} onOpenChange={open => !open && !updatingCollection && setCollectionShift(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{collectionShift?.cashCollected ? 'Отменить инкассацию?' : 'Подтвердить инкассацию?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {collectionShift?.cashCollected ? 'Отметка будет снята: смена снова появится как неинкассированная.' : `Подтвердить, что наличные по смене (${collectionShift ? formatCurrency(collectionShift.totalCash) : ''}) забраны владельцем?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={updatingCollection}>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCollection} disabled={updatingCollection} className="bg-blue-600 hover:bg-blue-700">
+              {updatingCollection ? 'Сохранение...' : 'Подтвердить'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

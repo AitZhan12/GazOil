@@ -8,6 +8,7 @@ import { Deliveries } from "./components/Deliveries";
 import { Operators } from "./components/Operators";
 import { Settings } from "./components/Settings";
 import { NotFound } from "./components/NotFound";
+import { WaterJournal } from "./components/WaterJournal";
 
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: "shift/:id", Component: ShiftForm },
       { path: "report", Component: MonthlyReport },
       { path: "deliveries", Component: Deliveries },
+      { path: "water", Component: WaterJournal },
       { path: "operators", Component: Operators },
       { path: "settings", Component: Settings },
       { path: "*", Component: NotFound },

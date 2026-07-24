@@ -287,6 +287,7 @@ export function ShiftForm() {
       id: isEditing ? (id as string) : '',
       operatorId, receivedById: receivedById || undefined,
       shiftType,
+      cashCollected: isEditing ? (allShifts.find(s => s.id === id)?.cashCollected ?? false) : false,
       startDate, startTime, endDate, endTime,
       pumps: pumpReadings,
       voucherLiters: parseFloat(voucherLiters) || 0,
