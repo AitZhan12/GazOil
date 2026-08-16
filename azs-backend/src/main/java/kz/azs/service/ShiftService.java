@@ -12,6 +12,7 @@ import kz.azs.repo.ShiftRepository;
 import kz.azs.web.NotFoundException;
 import kz.azs.web.dto.PumpReadingDto;
 import kz.azs.web.dto.ShiftDto;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,7 @@ public class ShiftService {
         Shift shift = new Shift();
         shift.setStation(auth.currentStation());
         apply(shift, dto);
+        validateOpeningReadings(shift, null);
         // Цены 107/112 владелец в форме не вводит — снапшотим из настроек на момент
         // создания, чтобы будущая правка цены не «двигала» эту смену.
         FuelPrice price = fuelPrices.requireCurrent();
@@ -76,6 +78,7 @@ public class ShiftService {
         shift.getReadings().clear();
         shifts.flush();
         apply(shift, dto);
+        validateOpeningReadings(shift, id);
         return mapper.toDto(shifts.save(shift), settings.requireConfig());
     }
 
@@ -144,6 +147,31 @@ public class ShiftService {
     private Shift load(Long id) {
         return shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Смена не найдена: " + id));
+    }
+
+    /** Каждая новая смена начинается с конечного показания предыдущей смены. */
+    private void validateOpeningReadings(Shift shift, Long excludeId) {
+        for (FuelReading reading : shift.getReadings()) {
+            List<FuelReading> previous = shifts.findPreviousReading(
+                    shift.getStation().getId(),
+                    reading.getPumpNumber(),
+                    shift.getStartedAt(),
+                    excludeId,
+                    PageRequest.of(0, 1)
+            );
+            if (previous.isEmpty()) {
+                continue;
+            }
+
+            BigDecimal expectedStart = previous.get(0).getReadingEnd();
+            if (reading.getReadingStart().compareTo(expectedStart) != 0) {
+                throw new IllegalArgumentException(
+                        "Колонка " + reading.getPumpNumber()
+                                + ": начальное показание должно совпадать с конечным показанием предыдущей смены ("
+                                + expectedStart + ")"
+                );
+            }
+        }
     }
 
     private Operator operatorRef(String id, String label) {

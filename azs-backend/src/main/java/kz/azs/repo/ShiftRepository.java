@@ -1,5 +1,6 @@
 package kz.azs.repo;
 
+import kz.azs.domain.FuelReading;
 import kz.azs.domain.Shift;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,6 +39,25 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
             order by s.startedAt
             """)
     List<Shift> findOverlapping(@Param("start") OffsetDateTime start,
-                               @Param("end") OffsetDateTime end,
-                               @Param("excludeId") Long excludeId);
+                                @Param("end") OffsetDateTime end,
+                                @Param("excludeId") Long excludeId);
+
+    /**
+     * Последнее показание конкретной колонки до начала смены. При редактировании
+     * исключаем саму смену, чтобы она не сравнивалась со своими старыми данными.
+     */
+    @Query("""
+            select r from FuelReading r
+            join fetch r.shift s
+            where s.station.id = :stationId
+              and r.pumpNumber = :pumpNumber
+              and s.endedAt <= :startedAt
+              and (:excludeId is null or s.id <> :excludeId)
+            order by s.endedAt desc, s.id desc
+            """)
+    List<FuelReading> findPreviousReading(@Param("stationId") Long stationId,
+                                          @Param("pumpNumber") short pumpNumber,
+                                          @Param("startedAt") OffsetDateTime startedAt,
+                                          @Param("excludeId") Long excludeId,
+                                          org.springframework.data.domain.Pageable pageable);
 }
