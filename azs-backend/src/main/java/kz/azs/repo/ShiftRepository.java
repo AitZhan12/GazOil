@@ -34,13 +34,15 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
      */
     @Query("""
             select s from Shift s
-            where s.startedAt < :end and s.endedAt > :start
+            where s.station.id = :stationId
+              and s.startedAt < :end and s.endedAt > :start
               and (:excludeId is null or s.id <> :excludeId)
             order by s.startedAt
             """)
-    List<Shift> findOverlapping(@Param("start") OffsetDateTime start,
-                                @Param("end") OffsetDateTime end,
-                                @Param("excludeId") Long excludeId);
+    List<Shift> findOverlapping(@Param("stationId") Long stationId,
+                                 @Param("start") OffsetDateTime start,
+                                 @Param("end") OffsetDateTime end,
+                                 @Param("excludeId") Long excludeId);
 
     /**
      * Последнее показание конкретной колонки до начала смены. При редактировании

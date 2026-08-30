@@ -61,7 +61,7 @@ public class ShiftService {
         Shift shift = new Shift();
         shift.setStation(auth.currentStation());
         apply(shift, dto);
-        validateOpeningReadings(shift, null);
+        validateOpeningReadingsUnlessOverlapping(shift, null);
         // Цены 107/112 владелец в форме не вводит — снапшотим из настроек на момент
         // создания, чтобы будущая правка цены не «двигала» эту смену.
         FuelPrice price = fuelPrices.requireCurrent();
@@ -78,7 +78,7 @@ public class ShiftService {
         shift.getReadings().clear();
         shifts.flush();
         apply(shift, dto);
-        validateOpeningReadings(shift, id);
+        validateOpeningReadingsUnlessOverlapping(shift, id);
         return mapper.toDto(shifts.save(shift), settings.requireConfig());
     }
 
@@ -149,8 +149,18 @@ public class ShiftService {
                 .orElseThrow(() -> new NotFoundException("Смена не найдена: " + id));
     }
 
-    /** Каждая новая смена начинается с конечного показания предыдущей смены. */
-    private void validateOpeningReadings(Shift shift, Long excludeId) {
+    /**
+     * Для последовательных смен начало счётчика обязано совпадать с предыдущим
+     * концом. У пересекающихся по времени смен общего «предыдущего» показания нет,
+     * поэтому их сохраняем, как и обещает предупреждение в форме.
+     */
+    private void validateOpeningReadingsUnlessOverlapping(Shift shift, Long excludeId) {
+        if (!shifts.findOverlapping(
+                shift.getStation().getId(), shift.getStartedAt(), shift.getEndedAt(), excludeId
+        ).isEmpty()) {
+            return;
+        }
+
         for (FuelReading reading : shift.getReadings()) {
             List<FuelReading> previous = shifts.findPreviousReading(
                     shift.getStation().getId(),

@@ -58,14 +58,14 @@ export function ShiftJournal() {
     });
   }, [shifts, selectedMonth, selectedOperator]);
 
-  // Id смен, участвующих хотя бы в одном пересечении по времени — те же правила,
-  // что и в форме (касание встык тоже считаем пересечением). Для отметки в строке.
+  // Id смен, участвующих хотя бы в одном пересечении по времени. Сверяем весь
+  // журнал, иначе метка исчезает при фильтре по оператору или месяцу.
   const overlapIds = useMemo(() => {
     const ms = (d: string, t: string) => new Date(`${d}T${t}`).getTime();
     const ids = new Set<string>();
-    for (let i = 0; i < filteredShifts.length; i++) {
-      for (let j = i + 1; j < filteredShifts.length; j++) {
-        const a = filteredShifts[i], b = filteredShifts[j];
+    for (let i = 0; i < shifts.length; i++) {
+      for (let j = i + 1; j < shifts.length; j++) {
+        const a = shifts[i], b = shifts[j];
         const as = ms(a.startDate, a.startTime), ae = ms(a.endDate, a.endTime);
         const bs = ms(b.startDate, b.startTime), be = ms(b.endDate, b.endTime);
         if (!(ae > as) || !(be > bs)) continue;
@@ -73,7 +73,7 @@ export function ShiftJournal() {
       }
     }
     return ids;
-  }, [filteredShifts]);
+  }, [shifts]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Удалить смену?')) return;
