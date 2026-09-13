@@ -119,6 +119,14 @@ export function MonthlyReport() {
         const baseSalary = operatorShifts.reduce((sum, shift) => sum + (shift.baseSalary ?? 0), 0);
         const bonus = operatorShifts.reduce((sum, shift) => sum + (shift.bonus ?? 0), 0);
         const totalPayout = baseSalary + bonus;
+        const cashDebt = shifts
+          .filter(shift => shift.operatorId === operator.id && shift.startDate <= `${selectedMonth}-31`)
+          .reduce((sum, shift) => {
+            const debt = shift.cashCollected
+              ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
+              : Math.max(0, shift.totalCash);
+            return sum + debt;
+          }, 0);
 
         return {
           operatorId: operator.id,
@@ -130,6 +138,7 @@ export function MonthlyReport() {
           baseSalary,
           bonus,
           totalPayout,
+          cashDebt,
         };
       });
 
@@ -272,6 +281,7 @@ export function MonthlyReport() {
         baseSalary: acc.baseSalary + stat.baseSalary,
         bonus: acc.bonus + stat.bonus,
         totalPayout: acc.totalPayout + stat.totalPayout,
+        cashDebt: acc.cashDebt + stat.cashDebt,
       }),
       {
         shiftsCount: 0,
@@ -281,6 +291,7 @@ export function MonthlyReport() {
         baseSalary: 0,
         bonus: 0,
         totalPayout: 0,
+        cashDebt: 0,
       }
     );
   }, [operatorStats]);
@@ -400,6 +411,7 @@ export function MonthlyReport() {
         'ЗП база (₸)',
         'Бонус (₸)',
         'К выплате (₸)',
+        'Долг по кассе на конец месяца (₸)',
       ];
       const rows = operatorShifts.map(s => [
         formatDate(s.startDate),
@@ -418,6 +430,7 @@ export function MonthlyReport() {
         (selectedStat?.baseSalary ?? 0).toFixed(0),
         (selectedStat?.bonus ?? 0).toFixed(0),
         (selectedStat?.totalPayout ?? 0).toFixed(0),
+        (selectedStat?.cashDebt ?? 0).toFixed(0),
       ]);
       downloadExcel([headers, ...rows], `Расчет_${selectedOperatorName}_${selectedMonthLabel}.xls`);
       return;
@@ -432,6 +445,7 @@ export function MonthlyReport() {
       'ЗП база (₸)',
       'Бонус (₸)',
       'Итого к выплате (₸)',
+      'Долг по кассе на конец месяца (₸)',
     ];
     const rows = operatorStats.map(stat => [
       stat.operatorName,
@@ -441,6 +455,7 @@ export function MonthlyReport() {
       stat.baseSalary.toFixed(0),
       stat.bonus.toFixed(0),
       stat.totalPayout.toFixed(0),
+      stat.cashDebt.toFixed(0),
     ]);
     rows.push([
       'ИТОГО',
@@ -450,6 +465,7 @@ export function MonthlyReport() {
       totals.baseSalary.toFixed(0),
       totals.bonus.toFixed(0),
       totals.totalPayout.toFixed(0),
+      totals.cashDebt.toFixed(0),
     ]);
     downloadExcel([headers, ...rows], `Зарплатный_акт_${selectedMonthLabel}.xls`);
   };
@@ -476,6 +492,7 @@ export function MonthlyReport() {
             <td class="num">${formatCurrency(stat.baseSalary)}</td>
             <td class="num">${formatCurrency(stat.bonus)}</td>
             <td class="num">${formatCurrency(stat.totalPayout)}</td>
+            <td class="num">${formatCurrency(stat.cashDebt)}</td>
           </tr>`).join('');
     const total = isSingle ? selectedStat : totals;
 
@@ -491,6 +508,7 @@ export function MonthlyReport() {
           <th class="num">ЗП база</th>
           <th class="num">Бонус</th>
           <th class="num">К выплате</th>
+          ${!isSingle ? '<th class="num">Долг по кассе</th>' : ''}
         </tr>
         ${rowsHtml}
         <tr class="total">
@@ -501,6 +519,7 @@ export function MonthlyReport() {
           <td class="num">${formatCurrency(total?.baseSalary ?? 0)}</td>
           <td class="num">${formatCurrency(total?.bonus ?? 0)}</td>
           <td class="num">${formatCurrency(total?.totalPayout ?? 0)}</td>
+          ${!isSingle ? `<td class="num">${formatCurrency(total?.cashDebt ?? 0)}</td>` : ''}
         </tr>
       </table>
     `);
@@ -570,12 +589,13 @@ export function MonthlyReport() {
 
       {/* Карточки-итоги по выбранному оператору */}
       {isSingle && hasData && selectedStat && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
           <SummaryCard label="Смен" value={String(selectedStat.shiftsCount)} />
           <SummaryCard label="Реализация" value={`${formatLiters(selectedStat.totalLiters)} л`} />
           <SummaryCard label="ЗП база" value={formatCurrency(selectedStat.baseSalary)} />
-          <SummaryCard label="Бонус" value={formatCurrency(selectedStat.bonus)} />
-          <SummaryCard label="К выплате" value={formatCurrency(selectedStat.totalPayout)} accent />
+            <SummaryCard label="Бонус" value={formatCurrency(selectedStat.bonus)} />
+            <SummaryCard label="К выплате" value={formatCurrency(selectedStat.totalPayout)} accent />
+            <SummaryCard label="Долг по кассе" value={formatCurrency(selectedStat.cashDebt)} />
         </div>
       )}
 
@@ -634,7 +654,7 @@ export function MonthlyReport() {
         /* Зарплатный акт по всем операторам */
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[760px]">
+            <table className="w-full border-collapse min-w-[900px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                   <th className={`${thCell} text-left`} style={thStyle}>Оператор</th>
@@ -644,6 +664,7 @@ export function MonthlyReport() {
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>ЗП база</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>Бонус</th>
                   <th className={`${thCell} text-right bg-blue-50`} style={thStyle}>К выплате</th>
+                  <th className={`${thCell} text-right bg-red-50`} style={thStyle}>Долг по кассе</th>
                 </tr>
               </thead>
               <tbody>
@@ -660,6 +681,7 @@ export function MonthlyReport() {
                     <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(stat.baseSalary)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-slate-700 border-r border-[#edf0f5] bg-blue-50/40" style={{ fontSize: '13px' }}>{formatCurrency(stat.bonus)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-blue-800 bg-blue-50/40" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(stat.totalPayout)}</td>
+                    <td className={`px-4 py-2.5 text-right font-mono ${stat.cashDebt > 0 ? 'text-red-700 bg-red-50/60 font-semibold' : 'text-slate-500 bg-red-50/40'}`} style={{ fontSize: '13px' }}>{formatCurrency(stat.cashDebt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -672,6 +694,7 @@ export function MonthlyReport() {
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(totals.baseSalary)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5] bg-blue-100/60" style={{ fontSize: '13px', fontWeight: 600 }}>{formatCurrency(totals.bonus)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-blue-900 bg-blue-100/60" style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(totals.totalPayout)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-red-800 bg-red-100/60" style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(totals.cashDebt)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -854,7 +877,8 @@ export function MonthlyReport() {
         <span className="text-amber-800">
           <strong>Примечание:</strong> ЗП — сумма ставок по типам смен, бонус — сумма ступенчатых
           бонусов за объём по каждой смене. Ставки и таблицу бонусов задаёт владелец в разделе
-          «Настройки». Это сумма до удержаний (ИПН/ОПВ/ВОСМС не считаются).
+          «Настройки». Это сумма до удержаний (ИПН/ОПВ/ВОСМС не считаются). Долг по кассе
+          показан справочно на конец выбранного месяца и автоматически из зарплаты не списывается.
           {!isSingle && ' Нажмите на строку оператора, чтобы открыть детализацию по сменам.'}
         </span>
       </div>
