@@ -96,7 +96,7 @@ export function ShiftJournal() {
       return;
     }
     const receivedVouchers = Number(voucherReceived);
-    if (!collectionShift.cashCollected && collectionShift.voucherLiters > 0
+    if (!collectionShift.cashCollected && voucherLitersOf(collectionShift) > 0
       && (!voucherReceived.trim() || !Number.isFinite(receivedVouchers) || receivedVouchers < 0)) {
       setError('Укажите фактически принятые талоны');
       return;
@@ -107,7 +107,7 @@ export function ShiftJournal() {
         collectionShift.id,
         !collectionShift.cashCollected,
         collectionShift.cashCollected ? undefined : received,
-        collectionShift.cashCollected || collectionShift.voucherLiters <= 0 ? undefined : receivedVouchers,
+        collectionShift.cashCollected || voucherLitersOf(collectionShift) <= 0 ? undefined : receivedVouchers,
       );
       setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
       setCollectionShift(null);
@@ -120,25 +120,28 @@ export function ShiftJournal() {
     return operators.find(op => op.id === id)?.name || 'Неизвестно';
   };
 
+  // Старые смены могут прийти из API без значения талонов.
+  const voucherLitersOf = (shift: Shift) => shift.voucherLiters ?? 0;
+
   const cashDebt = (shift: Shift) => shift.cashCollected
     ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
     : Math.max(0, shift.totalCash);
 
   const voucherDebt = (shift: Shift) => shift.cashCollected
-    ? Math.max(0, shift.voucherLiters - (shift.voucherReceived ?? shift.voucherLiters))
-    : Math.max(0, shift.voucherLiters);
+    ? Math.max(0, voucherLitersOf(shift) - (shift.voucherReceived ?? voucherLitersOf(shift)))
+    : Math.max(0, voucherLitersOf(shift));
 
   const openCollection = (shift: Shift) => {
     setError('');
     setCashReceived(String(shift.cashReceived ?? shift.totalCash));
-    setVoucherReceived(String(shift.voucherReceived ?? shift.voucherLiters));
+    setVoucherReceived(String(shift.voucherReceived ?? voucherLitersOf(shift)));
     setCollectionShift(shift);
   };
 
   // Totals for footer
   const totalLiters = filteredShifts.reduce((s, sh) => s + sh.totalLiters, 0);
   const totalKaspiQR = filteredShifts.reduce((s, sh) => s + (sh.kaspiQR ?? 0), 0);
-  const totalVoucherLiters = filteredShifts.reduce((s, sh) => s + sh.voucherLiters, 0);
+  const totalVoucherLiters = filteredShifts.reduce((s, sh) => s + voucherLitersOf(sh), 0);
   const totalCash = filteredShifts.reduce((s, sh) => s + sh.totalCash, 0);
 
   return (
@@ -300,7 +303,7 @@ export function ShiftJournal() {
                     {formatCurrency(cashDebt(shift))}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>
-                    {formatLiters(shift.voucherLiters)}
+                    {formatLiters(voucherLitersOf(shift))}
                   </td>
                   <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${voucherDebt(shift) > 0 ? 'bg-red-50 text-red-700 font-semibold' : 'text-slate-500'}`} style={{ fontSize: '13px' }}>
                     {formatLiters(voucherDebt(shift))}
@@ -372,7 +375,7 @@ export function ShiftJournal() {
               {collectionShift?.cashCollected ? 'Отметка будет снята: смена снова появится как неинкассированная.' : `По расчёту смены: ${collectionShift ? formatCurrency(collectionShift.totalCash) : ''}. Укажите фактически принятую сумму.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {!collectionShift?.cashCollected && (
+          {collectionShift && !collectionShift.cashCollected && (
             <div className="space-y-3">
               <div>
                 <label htmlFor="cash-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято, ₸</label>
@@ -387,14 +390,14 @@ export function ShiftJournal() {
                   className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]"
                 />
               </div>
-              {collectionShift.voucherLiters > 0 && (
+              {voucherLitersOf(collectionShift) > 0 && (
                 <div>
                   <label htmlFor="voucher-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято талонов, л</label>
                   <Input
                     id="voucher-received"
                     type="number"
                     min="0"
-                    max={collectionShift.voucherLiters}
+                    max={voucherLitersOf(collectionShift)}
                     step="0.01"
                     value={voucherReceived}
                     onChange={event => setVoucherReceived(event.target.value)}
