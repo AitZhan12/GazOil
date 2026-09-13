@@ -22,6 +22,7 @@ public record ShiftDto(
         String shiftType,          // full (сутки) | day (день) | night (ночь)
         boolean cashCollected,
         BigDecimal cashReceived,   // фактически принято владельцем при инкассации
+        BigDecimal voucherReceived, // фактически принято талонов при инкассации
         List<PumpReadingDto> pumps,
 
         // Ввод владельца — только литры и безнал

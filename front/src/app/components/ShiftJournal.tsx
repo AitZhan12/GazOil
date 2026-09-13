@@ -22,6 +22,7 @@ export function ShiftJournal() {
   const [error, setError] = useState('');
   const [collectionShift, setCollectionShift] = useState<Shift | null>(null);
   const [cashReceived, setCashReceived] = useState('');
+  const [voucherReceived, setVoucherReceived] = useState('');
   const [updatingCollection, setUpdatingCollection] = useState(false);
 
   useEffect(() => {
@@ -94,12 +95,19 @@ export function ShiftJournal() {
       setError('Укажите фактически принятую сумму');
       return;
     }
+    const receivedVouchers = Number(voucherReceived);
+    if (!collectionShift.cashCollected && collectionShift.voucherLiters > 0
+      && (!voucherReceived.trim() || !Number.isFinite(receivedVouchers) || receivedVouchers < 0)) {
+      setError('Укажите фактически принятые талоны');
+      return;
+    }
     setUpdatingCollection(true);
     try {
       const updated = await setShiftCashCollected(
         collectionShift.id,
         !collectionShift.cashCollected,
         collectionShift.cashCollected ? undefined : received,
+        collectionShift.cashCollected || collectionShift.voucherLiters <= 0 ? undefined : receivedVouchers,
       );
       setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
       setCollectionShift(null);
@@ -116,9 +124,14 @@ export function ShiftJournal() {
     ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
     : Math.max(0, shift.totalCash);
 
+  const voucherDebt = (shift: Shift) => shift.cashCollected
+    ? Math.max(0, shift.voucherLiters - (shift.voucherReceived ?? shift.voucherLiters))
+    : Math.max(0, shift.voucherLiters);
+
   const openCollection = (shift: Shift) => {
     setError('');
     setCashReceived(String(shift.cashReceived ?? shift.totalCash));
+    setVoucherReceived(String(shift.voucherReceived ?? shift.voucherLiters));
     setCollectionShift(shift);
   };
 
@@ -204,7 +217,7 @@ export function ShiftJournal() {
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[980px]">
+          <table className="w-full border-collapse min-w-[1080px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -227,6 +240,9 @@ export function ShiftJournal() {
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Талоны (л)
+                </th>
+                <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  Долг талонов (л)
                 </th>
                 <th className="px-4 py-2.5 text-center text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Инкассация
@@ -286,6 +302,9 @@ export function ShiftJournal() {
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>
                     {formatLiters(shift.voucherLiters)}
                   </td>
+                  <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${voucherDebt(shift) > 0 ? 'bg-red-50 text-red-700 font-semibold' : 'text-slate-500'}`} style={{ fontSize: '13px' }}>
+                    {formatLiters(voucherDebt(shift))}
+                  </td>
                   <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
                     <button type="button" onClick={() => openCollection(shift)}
                       aria-label={shift.cashCollected ? 'Отменить отметку инкассации' : 'Отметить инкассацию'}
@@ -337,6 +356,7 @@ export function ShiftJournal() {
                   {formatLiters(totalVoucherLiters)}
                 </td>
                 <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
+                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
                 <td className="px-4 py-2.5" />
               </tr>
             </tfoot>
@@ -353,18 +373,35 @@ export function ShiftJournal() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {!collectionShift?.cashCollected && (
-            <div>
-              <label htmlFor="cash-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято, ₸</label>
-              <Input
-                id="cash-received"
-                type="number"
-                min="0"
-                max={Math.max(0, collectionShift?.totalCash ?? 0)}
-                step="0.01"
-                value={cashReceived}
-                onChange={event => setCashReceived(event.target.value)}
-                className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]"
-              />
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="cash-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято, ₸</label>
+                <Input
+                  id="cash-received"
+                  type="number"
+                  min="0"
+                  max={Math.max(0, collectionShift?.totalCash ?? 0)}
+                  step="0.01"
+                  value={cashReceived}
+                  onChange={event => setCashReceived(event.target.value)}
+                  className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]"
+                />
+              </div>
+              {collectionShift.voucherLiters > 0 && (
+                <div>
+                  <label htmlFor="voucher-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято талонов, л</label>
+                  <Input
+                    id="voucher-received"
+                    type="number"
+                    min="0"
+                    max={collectionShift.voucherLiters}
+                    step="0.01"
+                    value={voucherReceived}
+                    onChange={event => setVoucherReceived(event.target.value)}
+                    className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]"
+                  />
+                </div>
+              )}
             </div>
           )}
           <AlertDialogFooter>

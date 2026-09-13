@@ -81,10 +81,10 @@ export function deleteShift(id: string): Promise<void> {
   return http<void>(`/shifts/${id}`, { method: 'DELETE' });
 }
 
-export function setShiftCashCollected(id: string, cashCollected: boolean, cashReceived?: number): Promise<Shift> {
+export function setShiftCashCollected(id: string, cashCollected: boolean, cashReceived?: number, voucherReceived?: number): Promise<Shift> {
   return http<Shift>(`/shifts/${id}/cash-collected`, {
     method: 'PATCH',
-    body: JSON.stringify({ cashCollected, cashReceived }),
+    body: JSON.stringify({ cashCollected, cashReceived, voucherReceived }),
   });
 }
 

@@ -90,7 +90,7 @@ public class ShiftService {
         shifts.deleteById(id);
     }
 
-    public ShiftDto setCashCollected(Long id, boolean collected, BigDecimal cashReceived) {
+    public ShiftDto setCashCollected(Long id, boolean collected, BigDecimal cashReceived, BigDecimal voucherReceived) {
         Shift shift = load(id);
         if (collected) {
             if (cashReceived == null || cashReceived.signum() < 0) {
@@ -101,8 +101,22 @@ public class ShiftService {
                 throw new IllegalArgumentException("Принятая сумма не может быть больше кассы смены");
             }
             shift.setCashReceived(cashReceived);
+
+            BigDecimal expectedVouchers = mapper.toDto(shift, settings.requireConfig()).voucherLiters();
+            if (expectedVouchers.signum() > 0) {
+                if (voucherReceived == null || voucherReceived.signum() < 0) {
+                    throw new IllegalArgumentException("Укажите фактически принятые талоны");
+                }
+                if (voucherReceived.compareTo(expectedVouchers) > 0) {
+                    throw new IllegalArgumentException("Принято талонов больше, чем по смене");
+                }
+                shift.setVoucherReceived(voucherReceived);
+            } else {
+                shift.setVoucherReceived(null);
+            }
         } else {
             shift.setCashReceived(null);
+            shift.setVoucherReceived(null);
         }
         shift.setCashCollected(collected);
         return mapper.toDto(shifts.save(shift), settings.requireConfig());

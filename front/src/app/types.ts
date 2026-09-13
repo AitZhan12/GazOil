@@ -31,6 +31,7 @@ export interface Shift {
   shiftType: ShiftType;
   cashCollected: boolean;
   cashReceived?: number;
+  voucherReceived?: number;
   pumps: PumpReading[];
   
   // Ввод владельца — только литры и безнал
@@ -124,4 +125,5 @@ export interface MonthlyOperatorStats {
   bonus: number;
   totalPayout: number;
   cashDebt: number; // непогашенный долг по кассе за отчётный месяц
+  voucherDebt: number; // непогашенный долг по талонам за отчётный месяц
 }

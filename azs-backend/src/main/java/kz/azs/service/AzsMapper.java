@@ -86,6 +86,7 @@ public class AzsMapper {
                 shift.getShiftType(),
                 shift.isCashCollected(),
                 shift.getCashReceived(),
+                shift.getVoucherReceived(),
                 pumps,
                 nz(b.getTalonyLiters()),
                 nz(b.getCardLiters()),
