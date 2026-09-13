@@ -90,8 +90,20 @@ public class ShiftService {
         shifts.deleteById(id);
     }
 
-    public ShiftDto setCashCollected(Long id, boolean collected) {
+    public ShiftDto setCashCollected(Long id, boolean collected, BigDecimal cashReceived) {
         Shift shift = load(id);
+        if (collected) {
+            if (cashReceived == null || cashReceived.signum() < 0) {
+                throw new IllegalArgumentException("Укажите фактически принятую сумму");
+            }
+            BigDecimal expectedCash = mapper.toDto(shift, settings.requireConfig()).totalCash().max(BigDecimal.ZERO);
+            if (cashReceived.compareTo(expectedCash) > 0) {
+                throw new IllegalArgumentException("Принятая сумма не может быть больше кассы смены");
+            }
+            shift.setCashReceived(cashReceived);
+        } else {
+            shift.setCashReceived(null);
+        }
         shift.setCashCollected(collected);
         return mapper.toDto(shifts.save(shift), settings.requireConfig());
     }

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Plus, Pencil, Trash2, Layers, AlertTriangle, Check } from 'lucide-react';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { getShifts, getOperators, deleteShift, setShiftCashCollected } from '../lib/storage';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
@@ -20,6 +21,7 @@ export function ShiftJournal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [collectionShift, setCollectionShift] = useState<Shift | null>(null);
+  const [cashReceived, setCashReceived] = useState('');
   const [updatingCollection, setUpdatingCollection] = useState(false);
 
   useEffect(() => {
@@ -87,9 +89,18 @@ export function ShiftJournal() {
 
   const confirmCollection = async () => {
     if (!collectionShift) return;
+    const received = Number(cashReceived);
+    if (!collectionShift.cashCollected && (!cashReceived.trim() || !Number.isFinite(received) || received < 0)) {
+      setError('Укажите фактически принятую сумму');
+      return;
+    }
     setUpdatingCollection(true);
     try {
-      const updated = await setShiftCashCollected(collectionShift.id, !collectionShift.cashCollected);
+      const updated = await setShiftCashCollected(
+        collectionShift.id,
+        !collectionShift.cashCollected,
+        collectionShift.cashCollected ? undefined : received,
+      );
       setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
       setCollectionShift(null);
     } catch (e) {
@@ -99,6 +110,16 @@ export function ShiftJournal() {
 
   const getOperatorName = (id: string) => {
     return operators.find(op => op.id === id)?.name || 'Неизвестно';
+  };
+
+  const cashDebt = (shift: Shift) => shift.cashCollected
+    ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
+    : Math.max(0, shift.totalCash);
+
+  const openCollection = (shift: Shift) => {
+    setError('');
+    setCashReceived(String(shift.cashReceived ?? shift.totalCash));
+    setCollectionShift(shift);
   };
 
   // Totals for footer
@@ -183,7 +204,7 @@ export function ShiftJournal() {
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[860px]">
+          <table className="w-full border-collapse min-w-[980px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -200,6 +221,9 @@ export function ShiftJournal() {
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Наличными (₸)
+                </th>
+                <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  Долг (₸)
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Талоны (л)
@@ -256,11 +280,14 @@ export function ShiftJournal() {
                   <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${shift.totalCash < 0 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '13px' }}>
                     {formatCurrency(shift.totalCash)}
                   </td>
+                  <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${cashDebt(shift) > 0 ? 'bg-red-50 text-red-700 font-semibold' : 'text-slate-500'}`} style={{ fontSize: '13px' }}>
+                    {formatCurrency(cashDebt(shift))}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>
                     {formatLiters(shift.voucherLiters)}
                   </td>
                   <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
-                    <button type="button" onClick={() => setCollectionShift(shift)}
+                    <button type="button" onClick={() => openCollection(shift)}
                       aria-label={shift.cashCollected ? 'Отменить отметку инкассации' : 'Отметить инкассацию'}
                       className={`inline-flex size-5 items-center justify-center rounded border transition-colors ${shift.cashCollected ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700' : 'border-slate-300 text-transparent hover:border-blue-500 hover:bg-blue-50'}`}>
                       <Check className="size-3.5" strokeWidth={3} />
@@ -305,6 +332,7 @@ export function ShiftJournal() {
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatCurrency(totalCash)}
                 </td>
+                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatLiters(totalVoucherLiters)}
                 </td>
@@ -321,9 +349,24 @@ export function ShiftJournal() {
           <AlertDialogHeader>
             <AlertDialogTitle>{collectionShift?.cashCollected ? 'Отменить инкассацию?' : 'Подтвердить инкассацию?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              {collectionShift?.cashCollected ? 'Отметка будет снята: смена снова появится как неинкассированная.' : `Подтвердить, что наличные по смене (${collectionShift ? formatCurrency(collectionShift.totalCash) : ''}) забраны владельцем?`}
+              {collectionShift?.cashCollected ? 'Отметка будет снята: смена снова появится как неинкассированная.' : `По расчёту смены: ${collectionShift ? formatCurrency(collectionShift.totalCash) : ''}. Укажите фактически принятую сумму.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {!collectionShift?.cashCollected && (
+            <div>
+              <label htmlFor="cash-received" className="text-slate-600" style={{ fontSize: '12px' }}>Фактически принято, ₸</label>
+              <Input
+                id="cash-received"
+                type="number"
+                min="0"
+                max={Math.max(0, collectionShift?.totalCash ?? 0)}
+                step="0.01"
+                value={cashReceived}
+                onChange={event => setCashReceived(event.target.value)}
+                className="mt-1 h-8 border-[#d1d9e6] bg-[#f8fafc]"
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={updatingCollection}>Отмена</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCollection} disabled={updatingCollection} className="bg-blue-600 hover:bg-blue-700">

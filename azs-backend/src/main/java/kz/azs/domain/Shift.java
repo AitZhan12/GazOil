@@ -47,6 +47,10 @@ public class Shift {
     @Column(name = "cash_collected", nullable = false)
     private boolean cashCollected = false;
 
+    /** Сумма, фактически принятая владельцем при инкассации. */
+    @Column(name = "cash_received", precision = 14, scale = 2)
+    private java.math.BigDecimal cashReceived;
+
     @OneToMany(mappedBy = "shift", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FuelReading> readings = new ArrayList<>();
 

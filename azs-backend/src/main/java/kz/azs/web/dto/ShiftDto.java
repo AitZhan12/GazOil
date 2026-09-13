@@ -21,6 +21,7 @@ public record ShiftDto(
         String endTime,
         String shiftType,          // full (сутки) | day (день) | night (ночь)
         boolean cashCollected,
+        BigDecimal cashReceived,   // фактически принято владельцем при инкассации
         List<PumpReadingDto> pumps,
 
         // Ввод владельца — только литры и безнал

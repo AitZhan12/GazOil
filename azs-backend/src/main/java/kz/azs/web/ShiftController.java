@@ -39,7 +39,7 @@ public class ShiftController {
 
     @PatchMapping("/{id}/cash-collected")
     public ShiftDto setCashCollected(@PathVariable Long id, @RequestBody CashCollectedRequest request) {
-        return service.setCashCollected(id, request.cashCollected());
+        return service.setCashCollected(id, request.cashCollected(), request.cashReceived());
     }
 
     @DeleteMapping("/{id}")
@@ -48,5 +48,5 @@ public class ShiftController {
         service.delete(id);
     }
 
-    public record CashCollectedRequest(boolean cashCollected) {}
+    public record CashCollectedRequest(boolean cashCollected, java.math.BigDecimal cashReceived) {}
 }

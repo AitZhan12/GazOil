@@ -4,11 +4,12 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { getOperators, createOperator, updateOperator } from '../lib/storage';
-import { Operator } from '../types';
+import { getOperators, getShifts, createOperator, updateOperator } from '../lib/storage';
+import { Operator, Shift } from '../types';
 
 export function Operators() {
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -18,8 +19,12 @@ export function Operators() {
 
   useEffect(() => {
     let cancelled = false;
-    getOperators()
-      .then(ops => { if (!cancelled) setOperators(ops); })
+    Promise.all([getOperators(), getShifts()])
+      .then(([ops, loadedShifts]) => {
+        if (cancelled) return;
+        setOperators(ops);
+        setShifts(loadedShifts);
+      })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Ошибка загрузки'); });
     return () => { cancelled = true; };
   }, []);
@@ -71,6 +76,19 @@ export function Operators() {
     }
   };
 
+  const cashDebt = (operatorId: string) => shifts
+    .filter(shift => shift.operatorId === operatorId)
+    .reduce((total, shift) => {
+      const debt = shift.cashCollected
+        ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
+        : Math.max(0, shift.totalCash);
+      return total + debt;
+    }, 0);
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat('ru-RU', {
+    style: 'currency', currency: 'KZT', maximumFractionDigits: 0,
+  }).format(value);
+
   return (
     <div className="space-y-4">
       {error && (
@@ -93,11 +111,12 @@ export function Operators() {
 
       <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[480px]">
+        <table className="w-full border-collapse min-w-[600px]">
           <thead>
             <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
               <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ФИО</th>
               <th className="px-4 py-2.5 text-center text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Статус</th>
+              <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Долг по кассе</th>
               <th className="px-4 py-2.5 text-right text-slate-500" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Действия</th>
             </tr>
           </thead>
@@ -107,13 +126,16 @@ export function Operators() {
                 key={operator.id}
                 className={`border-b border-[#edf0f5] hover:bg-[#f8fafc] transition-colors ${!operator.active ? 'opacity-60' : ''} ${idx === operators.length - 1 ? 'border-b-0' : ''}`}
               >
-                <td className="px-4 py-2.5 text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                <td className={`px-4 py-2.5 border-r border-[#edf0f5] ${cashDebt(operator.id) > 0 ? 'bg-red-50 text-red-800 font-medium' : 'text-slate-900'}`} style={{ fontSize: '13px' }}>
                   {operator.name}
                 </td>
                 <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded ${operator.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`} style={{ fontSize: '11px', fontWeight: 600 }}>
                     {operator.active ? 'Активен' : 'Неактивен'}
                   </span>
+                </td>
+                <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${cashDebt(operator.id) > 0 ? 'bg-red-50 text-red-700 font-semibold' : 'text-slate-500'}`} style={{ fontSize: '13px' }}>
+                  {formatCurrency(cashDebt(operator.id))}
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1">

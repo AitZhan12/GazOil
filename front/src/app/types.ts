@@ -30,6 +30,7 @@ export interface Shift {
   endTime: string;
   shiftType: ShiftType;
   cashCollected: boolean;
+  cashReceived?: number;
   pumps: PumpReading[];
   
   // Ввод владельца — только литры и безнал
