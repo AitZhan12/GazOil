@@ -123,5 +123,5 @@ export interface MonthlyOperatorStats {
   baseSalary: number;
   bonus: number;
   totalPayout: number;
-  cashDebt: number; // непогашенный долг по кассе на конец отчётного месяца
+  cashDebt: number; // непогашенный долг по кассе за отчётный месяц
 }

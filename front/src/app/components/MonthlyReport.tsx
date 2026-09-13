@@ -119,8 +119,7 @@ export function MonthlyReport() {
         const baseSalary = operatorShifts.reduce((sum, shift) => sum + (shift.baseSalary ?? 0), 0);
         const bonus = operatorShifts.reduce((sum, shift) => sum + (shift.bonus ?? 0), 0);
         const totalPayout = baseSalary + bonus;
-        const cashDebt = shifts
-          .filter(shift => shift.operatorId === operator.id && shift.startDate <= `${selectedMonth}-31`)
+        const cashDebt = operatorShifts
           .reduce((sum, shift) => {
             const debt = shift.cashCollected
               ? Math.max(0, shift.totalCash - (shift.cashReceived ?? shift.totalCash))
@@ -411,7 +410,7 @@ export function MonthlyReport() {
         'ЗП база (₸)',
         'Бонус (₸)',
         'К выплате (₸)',
-        'Долг по кассе на конец месяца (₸)',
+        'Долг по кассе за месяц (₸)',
       ];
       const rows = operatorShifts.map(s => [
         formatDate(s.startDate),
@@ -445,7 +444,7 @@ export function MonthlyReport() {
       'ЗП база (₸)',
       'Бонус (₸)',
       'Итого к выплате (₸)',
-      'Долг по кассе на конец месяца (₸)',
+      'Долг по кассе за месяц (₸)',
     ];
     const rows = operatorStats.map(stat => [
       stat.operatorName,
@@ -878,7 +877,7 @@ export function MonthlyReport() {
           <strong>Примечание:</strong> ЗП — сумма ставок по типам смен, бонус — сумма ступенчатых
           бонусов за объём по каждой смене. Ставки и таблицу бонусов задаёт владелец в разделе
           «Настройки». Это сумма до удержаний (ИПН/ОПВ/ВОСМС не считаются). Долг по кассе
-          показан справочно на конец выбранного месяца и автоматически из зарплаты не списывается.
+          показан справочно только за выбранный месяц и автоматически из зарплаты не списывается.
           {!isSingle && ' Нажмите на строку оператора, чтобы открыть детализацию по сменам.'}
         </span>
       </div>
