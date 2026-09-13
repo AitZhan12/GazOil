@@ -104,7 +104,7 @@ export function ShiftJournal() {
   // Totals for footer
   const totalLiters = filteredShifts.reduce((s, sh) => s + sh.totalLiters, 0);
   const totalKaspiQR = filteredShifts.reduce((s, sh) => s + (sh.kaspiQR ?? 0), 0);
-  const totalRevenue = filteredShifts.reduce((s, sh) => s + sh.totalRevenue, 0);
+  const totalVoucherLiters = filteredShifts.reduce((s, sh) => s + sh.voucherLiters, 0);
   const totalCash = filteredShifts.reduce((s, sh) => s + sh.totalCash, 0);
 
   return (
@@ -202,7 +202,7 @@ export function ShiftJournal() {
                   Наличными (₸)
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  Выручка (₸)
+                  Талоны (л)
                 </th>
                 <th className="px-4 py-2.5 text-center text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Инкассация
@@ -257,7 +257,7 @@ export function ShiftJournal() {
                     {formatCurrency(shift.totalCash)}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 500 }}>
-                    {formatCurrency(shift.totalRevenue)}
+                    {formatLiters(shift.voucherLiters)}
                   </td>
                   <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
                     <button type="button" onClick={() => setCollectionShift(shift)}
@@ -306,7 +306,7 @@ export function ShiftJournal() {
                   {formatCurrency(totalCash)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
-                  {formatCurrency(totalRevenue)}
+                  {formatLiters(totalVoucherLiters)}
                 </td>
                 <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
                 <td className="px-4 py-2.5" />

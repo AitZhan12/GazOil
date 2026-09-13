@@ -152,12 +152,15 @@ export function ShiftForm() {
           if (shift) fillFromShift(shift);
           else setLoadError('Смена не найдена');
         } else {
-          const now = new Date();
-          const today = now.toISOString().split('T')[0];
-          setStartDate(today);
-          setStartDateText(isoToRu(today));
+          const today = new Date().toISOString().split('T')[0];
+          const lastShiftDate = shs.reduce<string | null>((latest, shift) => {
+            return !latest || shift.startDate > latest ? shift.startDate : latest;
+          }, null);
+          const nextStartDate = lastShiftDate ? addDaysIso(lastShiftDate, 1) : today;
+          setStartDate(nextStartDate);
+          setStartDateText(isoToRu(nextStartDate));
           // Тип по умолчанию — «сутки», значит конец по умолчанию на след. день.
-          const endIso = endDateForType('full', today);
+          const endIso = endDateForType('full', nextStartDate);
           setEndDate(endIso);
           setEndDateText(isoToRu(endIso));
           // Цены 107/112 для новой смены — из общих настроек (снапшот сделает бэк).
