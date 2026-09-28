@@ -21,15 +21,6 @@ services:
       args:
         VITE_API_URL: /api
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "3003:80"
+    network_mode: host
     depends_on:
       - backend
-    networks:
-      - gazoil-network
-
-networks:
-  gazoil-network:
-    driver: bridge
