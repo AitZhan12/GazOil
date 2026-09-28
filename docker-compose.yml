@@ -12,6 +12,8 @@ services:
       API_CLOUD: ${API_CLOUD:-}
       AI_PROVIDER: ${AI_PROVIDER:-auto}
       AI_MODEL: ${AI_MODEL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build:
