@@ -168,6 +168,8 @@ public class ShiftService {
         b.setDiscountLiters(nz(dto.discountLiters()));
         b.setKaspiQr(nz(dto.kaspiQR()));
         b.setKaspiTransfer(nz(dto.kaspiTransfer()));
+        b.setHalykQr(nz(dto.halykQR()));
+        b.setHalykTransfer(nz(dto.halykTransfer()));
     }
 
     private Shift load(Long id) {

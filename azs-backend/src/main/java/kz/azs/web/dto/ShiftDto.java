@@ -31,6 +31,8 @@ public record ShiftDto(
         BigDecimal discountLiters,
         BigDecimal kaspiQR,
         BigDecimal kaspiTransfer,
+        BigDecimal halykQR,
+        BigDecimal halykTransfer,
 
         // Цены 107/112 — снапшот смены (на вход игнорируются, при создании берутся
         // из настроек fuel_price; на выход — чтобы показать множитель в форме)

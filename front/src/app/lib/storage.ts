@@ -30,6 +30,23 @@ async function http<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function parseShiftDocument(file: File): Promise<Record<string, unknown>> {
+  const form = new FormData();
+  form.append('file', file);
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE}/documents/parse`, {
+    method: 'POST',
+    headers: token ? { 'X-Auth-Token': token } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    let message = `Ошибка распознавания (${res.status})`;
+    try { const body = await res.json(); if (body?.error) message = body.error; } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 // ---- Операторы ----
 
 export function getOperators(): Promise<Operator[]> {

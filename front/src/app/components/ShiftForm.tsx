@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Save, AlertTriangle, Fuel } from 'lucide-react';
+import { ArrowLeft, Save, AlertTriangle, Fuel, Upload } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries, getTankResets } from '../lib/storage';
+import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries, getTankResets, parseShiftDocument } from '../lib/storage';
 import { calculateShiftFields, formatCurrency, formatLiters, formatNumber, salaryRateFor, bonusForLiters } from '../lib/calculations';
 import { getLastPumpReadings } from '../lib/shift-helpers';
 import { balanceAroundShift } from '../lib/inventory';
@@ -76,6 +76,8 @@ export function ShiftForm() {
   const [resets, setResets] = useState<TankReset[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   const [operatorId, setOperatorId] = useState('');
   const [receivedById, setReceivedById] = useState('');
@@ -105,8 +107,52 @@ export function ShiftForm() {
   const [regularPrice, setRegularPrice] = useState('');
   const [kaspiQR, setKaspiQR] = useState('');
   const [kaspiTransfer, setKaspiTransfer] = useState('');
+  const [halykQR, setHalykQR] = useState('');
+  const [halykTransfer, setHalykTransfer] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const applyParsedDocument = (data: Record<string, any>) => {
+    const operatorName = String(data.operatorName ?? '').trim().toLowerCase();
+    if (operatorName) {
+      const operator = operators.find(op => op.name.trim().toLowerCase() === operatorName);
+      if (operator) setOperatorId(operator.id);
+    }
+    const setDate = (value: unknown, setter: (v: string) => void, textSetter: (v: string) => void) => {
+      const iso = String(value ?? '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) { setter(iso); textSetter(isoToRu(iso)); }
+    };
+    setDate(data.startDate, setStartDate, setStartDateText);
+    setDate(data.endDate, setEndDate, setEndDateText);
+    if (data.startTime) setStartTime(String(data.startTime).slice(0, 5));
+    if (data.endTime) setEndTime(String(data.endTime).slice(0, 5));
+    if (['full', 'day', 'night'].includes(data.shiftType)) setShiftType(data.shiftType);
+    const pumps = Array.isArray(data.pumps) ? data.pumps : [];
+    const pump = (n: number) => pumps.find((p: any) => Number(p?.pumpNumber) === n) ?? {};
+    if (pump(1).start != null) setPump1Start(String(pump(1).start));
+    if (pump(1).end != null) setPump1End(String(pump(1).end));
+    if (pump(2).start != null) setPump2Start(String(pump(2).start));
+    if (pump(2).end != null) setPump2End(String(pump(2).end));
+    if (pump(3).start != null) setPump3Start(String(pump(3).start));
+    if (pump(3).end != null) setPump3End(String(pump(3).end));
+    const number = (key: string) => data[key] == null ? undefined : String(data[key]);
+    if (number('voucherLiters') !== undefined) setVoucherLiters(number('voucherLiters')!);
+    if (number('cardLiters') !== undefined) setCardLiters(number('cardLiters')!);
+    if (number('discountLiters') !== undefined) setDiscountLiters(number('discountLiters')!);
+    if (number('kaspiQR') !== undefined) setKaspiQR(number('kaspiQR')!);
+    if (number('kaspiTransfer') !== undefined) setKaspiTransfer(number('kaspiTransfer')!);
+    if (number('halykQR') !== undefined) setHalykQR(number('halykQR')!);
+    if (number('halykTransfer') !== undefined) setHalykTransfer(number('halykTransfer')!);
+  };
+
+  const handleDocumentUpload = async (file?: File) => {
+    if (!file) return;
+    setAiLoading(true);
+    setAiError('');
+    try { applyParsedDocument(await parseShiftDocument(file)); }
+    catch (e) { setAiError(e instanceof Error ? e.message : 'Не удалось распознать документ'); }
+    finally { setAiLoading(false); }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +180,8 @@ export function ShiftForm() {
       setRegularPrice(shift.regularPrice.toString());
       setKaspiQR(shift.kaspiQR.toString());
       setKaspiTransfer(shift.kaspiTransfer.toString());
+      setHalykQR((shift.halykQR ?? 0).toString());
+      setHalykTransfer((shift.halykTransfer ?? 0).toString());
     };
 
     async function load() {
@@ -210,7 +258,9 @@ export function ShiftForm() {
     dPrice,
     bPrice,
     parseFloat(kaspiQR) || 0,
-    parseFloat(kaspiTransfer) || 0
+    parseFloat(kaspiTransfer) || 0,
+    parseFloat(halykQR) || 0,
+    parseFloat(halykTransfer) || 0
   );
 
   // Контроль непрерывности: «начало» новой смены должно совпасть с «концом» прошлой.
@@ -298,6 +348,8 @@ export function ShiftForm() {
       discountLiters: parseFloat(discountLiters) || 0,
       kaspiQR: parseFloat(kaspiQR) || 0,
       kaspiTransfer: parseFloat(kaspiTransfer) || 0,
+      halykQR: parseFloat(halykQR) || 0,
+      halykTransfer: parseFloat(halykTransfer) || 0,
       discountPrice: dPrice,
       regularPrice: bPrice,
       ...calculated,
@@ -325,16 +377,20 @@ export function ShiftForm() {
   const cashRowInput = (
     id: string, label: string, value: string,
     set: (v: string) => void, unit: string,
-  ) => (
-    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">
-      <Label htmlFor={id} className="text-slate-600 shrink-0" style={{ fontSize: '12px', fontWeight: 400 }}>{label}</Label>
+  ) => {
+    const isKaspi = id.startsWith('kaspi');
+    const isHalyk = id.startsWith('halyk');
+    return (
+    <div className={`flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b ${isKaspi ? 'border-red-100 bg-red-50/60 border-l-4 border-l-red-500' : isHalyk ? 'border-emerald-100 bg-emerald-50/60 border-l-4 border-l-emerald-500' : 'border-[#edf0f5]'}`}>
+      <Label htmlFor={id} className={`shrink-0 ${isKaspi ? 'text-red-700' : isHalyk ? 'text-emerald-700' : 'text-slate-600'}`} style={{ fontSize: '12px', fontWeight: isKaspi || isHalyk ? 700 : 400 }}>{label}</Label>
       <div className="flex items-center gap-1.5">
         <Input id={id} type="number" step="0.01" value={value} onChange={e => set(e.target.value)} placeholder="0.00"
-          className="h-8 w-28 font-mono border-[#d1d9e6] bg-[#f8fafc] text-right" style={{ fontSize: '13px' }} />
+          className={`h-8 w-28 font-mono text-right ${isKaspi ? 'border-red-300 bg-red-50 focus-visible:ring-red-300' : isHalyk ? 'border-emerald-300 bg-emerald-50 focus-visible:ring-emerald-300' : 'border-[#d1d9e6] bg-[#f8fafc]'}`} style={{ fontSize: '13px' }} />
         <span className="text-slate-400" style={{ fontSize: '12px' }}>{unit}</span>
       </div>
     </div>
-  );
+    );
+  };
 
   // Строка-расчёт блока «ИЗ НИХ»: подпись + вычисленное значение (read-only).
   const cashRowValue = (label: string, value: string) => (
@@ -361,7 +417,15 @@ export function ShiftForm() {
         <h1 className="text-slate-900" style={{ fontSize: '18px', fontWeight: 600 }}>
           {isEditing ? 'Редактирование смены' : 'Новая смена'}
         </h1>
+        <label className="ml-auto inline-flex items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700 cursor-pointer hover:bg-blue-100" style={{ fontSize: '12px' }}>
+          <Upload className="size-3.5" />
+          {aiLoading ? 'Распознаю…' : 'Загрузить отчет'}
+          <input type="file" accept="image/*,application/pdf" className="hidden" disabled={aiLoading}
+            onChange={e => { void handleDocumentUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+        </label>
       </div>
+
+      {aiError && <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800" style={{ fontSize: '13px' }}>{aiError}</div>}
 
       {loadError && (
         <div className="mb-4 px-4 py-2.5 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg text-red-700" style={{ fontSize: '13px' }}>
@@ -596,7 +660,7 @@ export function ShiftForm() {
           <div className={sectionHeaderClass}>
             <span className="size-5 rounded bg-blue-600 text-white flex items-center justify-center shrink-0" style={{ fontSize: '10px', fontWeight: 700 }}>В</span>
             <span className={sectionTitleClass} style={{ fontSize: '13px', fontWeight: 600 }}>ИЗ НИХ</span>
-            <span className="text-slate-400" style={{ fontSize: '11px' }}>— вводятся только литры и Kaspi; цены 107/112 из настроек</span>
+            <span className="text-slate-400" style={{ fontSize: '11px' }}>— вводятся только литры, Kaspi и Halyk; цены 107/112 из настроек</span>
           </div>
           <div className={sectionBodyClass}>
             <div className="space-y-0.5">
@@ -640,6 +704,8 @@ export function ShiftForm() {
               {/* Kaspi QR / перевод — ввод */}
               {cashRowInput('kaspiQR', 'Kaspi QR', kaspiQR, setKaspiQR, '₸')}
               {cashRowInput('kaspiTransfer', 'Kaspi перевод', kaspiTransfer, setKaspiTransfer, '₸')}
+              {cashRowInput('halykQR', 'Halyk QR', halykQR, setHalykQR, '₸')}
+              {cashRowInput('halykTransfer', 'Halyk перевод', halykTransfer, setHalykTransfer, '₸')}
 
               {/* Наличные по 112 — расчёт (может быть отрицательным) */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">

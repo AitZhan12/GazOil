@@ -3,15 +3,15 @@ services:
     build:
       context: ./azs-backend
     restart: unless-stopped
+    network_mode: host
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5432/azs
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/azs
       SPRING_DATASOURCE_USERNAME: azs
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-azs}
       SERVER_PORT: 8080
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - gazoil-network
+      API_CLOUD: ${API_CLOUD:-}
+      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      AI_MODEL: ${AI_MODEL:-}
 
   frontend:
     build:
@@ -19,6 +19,8 @@ services:
       args:
         VITE_API_URL: /api
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3003:80"
     depends_on:

@@ -15,7 +15,9 @@ export function calculateShiftFields(
   discountPrice: number,
   regularPrice: number,
   kaspiQR: number,
-  kaspiTransfer: number
+  kaspiTransfer: number,
+  halykQR: number,
+  halykTransfer: number
 ) {
   // Итого литров со всех колонок
   const totalLiters = pumps.reduce((sum, pump) => sum + (pump.end - pump.start), 0);
@@ -34,7 +36,7 @@ export function calculateShiftFields(
 
   // Наличные по 112 = общая сумма по 112 − безнал. Бывает отрицательной
   // (Kaspi QR > суммы по 112) — это нормально, не клампим.
-  const cashByBase = baseAmount - kaspiQR - kaspiTransfer;
+  const cashByBase = baseAmount - kaspiQR - kaspiTransfer - halykQR - halykTransfer;
   // Наличные по 107 = дисконтная сумма
   const cashByDiscount = discountAmount;
   // ИТОГО НАЛИЧНЫМИ = наличные по 112 + наличные по 107

@@ -245,12 +245,14 @@ export function MonthlyReport() {
     const discountAmount = hasManualBreakdown ? round2(discountLiters * discountUnitPrice) : autoDiscountAmount;
     const autoKaspiQR = round2(monthShifts.reduce((sum, shift) => sum + shift.kaspiQR, 0));
     const kaspiTransfer = round2(monthShifts.reduce((sum, shift) => sum + shift.kaspiTransfer, 0));
+    const halykQR = round2(monthShifts.reduce((sum, shift) => sum + (shift.halykQR ?? 0), 0));
+    const halykTransfer = round2(monthShifts.reduce((sum, shift) => sum + (shift.halykTransfer ?? 0), 0));
     const totalRevenue = round2(regularAmount + discountAmount);
     const serviceMemoInput = isReportEditing ? draftServiceMemo : serviceMemoByMonth[selectedMonth] ?? '';
     const serviceMemo = parseMoneyInput(serviceMemoInput);
     const kaspiQrInput = isReportEditing ? draftKaspiQr : kaspiQrByMonth[selectedMonth] ?? '';
     const effectiveKaspiQR = kaspiQrInput.trim() === '' ? autoKaspiQR : parseMoneyInput(kaspiQrInput);
-    const cashToDeposit = round2(totalRevenue - effectiveKaspiQR - kaspiTransfer - serviceMemo);
+    const cashToDeposit = round2(totalRevenue - effectiveKaspiQR - kaspiTransfer - halykQR - halykTransfer - serviceMemo);
 
     return {
       pumpRows,
@@ -270,6 +272,8 @@ export function MonthlyReport() {
       autoKaspiQR,
       effectiveKaspiQR,
       kaspiTransfer,
+      halykQR,
+      halykTransfer,
       serviceMemo,
       cashToDeposit,
       regularPriceLabel: regularPriceSet.size === 1 ? `${formatNumber([...regularPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
@@ -403,6 +407,8 @@ export function MonthlyReport() {
         <tr><td>По ${calc.discountPriceLabel}</td><td style="text-align:right">${liters(calc.discountLiters)} л = ${money(calc.discountAmount)} ₸</td></tr>
         <tr><td>Kaspi QR</td><td style="text-align:right">${money(calc.effectiveKaspiQR)} ₸</td></tr>
         <tr><td>Kaspi перевод</td><td style="text-align:right">${money(calc.kaspiTransfer)} ₸</td></tr>
+        <tr><td>Halyk QR</td><td style="text-align:right">${money(calc.halykQR)} ₸</td></tr>
+        <tr><td>Halyk перевод</td><td style="text-align:right">${money(calc.halykTransfer)} ₸</td></tr>
         <tr><td>Служебная записка</td><td style="text-align:right">${money(calc.serviceMemo)} ₸</td></tr>
         <tr><td><b>К внесению в кассу</b></td><td style="text-align:right"><b>${money(calc.cashToDeposit)} ₸</b></td></tr>
       </table>
@@ -846,13 +852,21 @@ export function MonthlyReport() {
                       <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.totalRevenue)}</div>
                     </div>
                     <div>
-                      <div className={calcLabel} style={{ fontSize: '10px', fontWeight: 700 }}>Kaspi перевод</div>
+                       <div className={`${calcLabel} text-red-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Kaspi перевод</div>
                       <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.kaspiTransfer)}</div>
+                    </div>
+                    <div>
+                       <div className={`${calcLabel} text-emerald-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Halyk QR</div>
+                      <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.halykQR)}</div>
+                    </div>
+                    <div>
+                       <div className={`${calcLabel} text-emerald-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Halyk перевод</div>
+                      <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.halykTransfer)}</div>
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="reportKaspiQr" className="text-slate-600" style={{ fontSize: '12px' }}>Kaspi QR, ₸</Label>
+                    <Label htmlFor="reportKaspiQr" className="text-red-700" style={{ fontSize: '12px', fontWeight: 600 }}>Kaspi QR, ₸</Label>
                     <Input
                       id="reportKaspiQr"
                       inputMode="decimal"

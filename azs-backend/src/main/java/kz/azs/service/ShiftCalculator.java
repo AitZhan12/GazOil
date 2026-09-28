@@ -33,7 +33,9 @@ public class ShiftCalculator {
             BigDecimal discountPrice,
             BigDecimal regularPrice,
             BigDecimal kaspiQR,
-            BigDecimal kaspiTransfer
+            BigDecimal kaspiTransfer,
+            BigDecimal halykQR,
+            BigDecimal halykTransfer
     ) {
         BigDecimal remainder = totalLiters
                 .subtract(discountLiters)
@@ -46,7 +48,8 @@ public class ShiftCalculator {
 
         // «Наличные по 112» на листе бывают отрицательными (Kaspi QR > суммы по 112) —
         // это нормально, НЕ клампим.
-        BigDecimal cashByBase = baseAmount.subtract(kaspiQR).subtract(kaspiTransfer);
+        BigDecimal cashByBase = baseAmount.subtract(kaspiQR).subtract(kaspiTransfer)
+                .subtract(halykQR).subtract(halykTransfer);
         BigDecimal cashByDiscount = discountAmount;
         BigDecimal totalCash = cashByBase.add(cashByDiscount);
 

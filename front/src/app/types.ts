@@ -40,6 +40,8 @@ export interface Shift {
   discountLiters: number;
   kaspiQR: number;
   kaspiTransfer: number;
+  halykQR: number;
+  halykTransfer: number;
 
   // Цены 107/112 — снапшот смены (берётся из настроек при создании)
   discountPrice: number;

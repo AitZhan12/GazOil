@@ -64,9 +64,11 @@ public class AzsMapper {
                 nz(b.getCardLiters()),
                 nz(b.getDiscountLiters()),
                 nz(b.getDiscountPrice()),
-                nz(b.getBasePrice()),
-                nz(b.getKaspiQr()),
-                nz(b.getKaspiTransfer())
+                 nz(b.getBasePrice()),
+                 nz(b.getKaspiQr()),
+                 nz(b.getKaspiTransfer()),
+                 nz(b.getHalykQr()),
+                 nz(b.getHalykTransfer())
         );
 
         OffsetDateTime start = shift.getStartedAt();
@@ -91,9 +93,11 @@ public class AzsMapper {
                 nz(b.getTalonyLiters()),
                 nz(b.getCardLiters()),
                 nz(b.getDiscountLiters()),
-                nz(b.getKaspiQr()),
-                nz(b.getKaspiTransfer()),
-                nz(b.getDiscountPrice()),
+                 nz(b.getKaspiQr()),
+                 nz(b.getKaspiTransfer()),
+                 nz(b.getHalykQr()),
+                 nz(b.getHalykTransfer()),
+                 nz(b.getDiscountPrice()),
                 nz(b.getBasePrice()),
                 t.totalLiters(),
                 t.discountAmount(),

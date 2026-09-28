@@ -17,3 +17,9 @@ spring:
 
 server:
   port: 8080
+
+ai:
+  provider: ${AI_PROVIDER:auto}
+  api-url: ${AI_API_URL:https://api.anthropic.com/v1/messages}
+  api-key: ${API_CLOUD:${AI_API_KEY:}}
+  model: ${AI_MODEL:}

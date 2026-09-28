@@ -40,4 +40,10 @@ public class ShiftBreakdown {
 
     @Column(name = "kaspi_transfer", nullable = false, precision = 14, scale = 2)
     private BigDecimal kaspiTransfer = BigDecimal.ZERO;
+
+    @Column(name = "halyk_qr", nullable = false, precision = 14, scale = 2)
+    private BigDecimal halykQr = BigDecimal.ZERO;
+
+    @Column(name = "halyk_transfer", nullable = false, precision = 14, scale = 2)
+    private BigDecimal halykTransfer = BigDecimal.ZERO;
 }

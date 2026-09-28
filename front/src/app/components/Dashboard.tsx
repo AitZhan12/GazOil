@@ -74,6 +74,8 @@ export function Dashboard() {
     const cash = monthShifts.reduce((s, x) => s + x.totalCash, 0);
     const kaspiQR = monthShifts.reduce((s, x) => s + (x.kaspiQR ?? 0), 0);
     const kaspiTransfer = monthShifts.reduce((s, x) => s + (x.kaspiTransfer ?? 0), 0);
+    const halykQR = monthShifts.reduce((s, x) => s + (x.halykQR ?? 0), 0);
+    const halykTransfer = monthShifts.reduce((s, x) => s + (x.halykTransfer ?? 0), 0);
     const payroll = monthShifts.reduce((s, x) => s + (x.baseSalary ?? 0) + (x.bonus ?? 0), 0);
     return {
       count,
@@ -82,6 +84,8 @@ export function Dashboard() {
       cash,
       kaspiQR,
       kaspiTransfer,
+      halykQR,
+      halykTransfer,
       payroll,
       avgLiters: count ? liters / count : 0,
       avgRevenue: count ? revenue / count : 0,
@@ -170,6 +174,8 @@ export function Dashboard() {
       ['Наличные, ₸', kpi.cash.toFixed(2)],
       ['Kaspi QR, ₸', kpi.kaspiQR.toFixed(2)],
       ['Kaspi перевод, ₸', kpi.kaspiTransfer.toFixed(2)],
+      ['Halyk QR, ₸', kpi.halykQR.toFixed(2)],
+      ['Halyk перевод, ₸', kpi.halykTransfer.toFixed(2)],
       ['Фонд ЗП, ₸', kpi.payroll.toFixed(2)],
       ['До расходов, ₸', kpi.beforeExpenses.toFixed(2)],
       ['Приход газа, л', monthDeliveries.reduce((s, d) => s + d.liters, 0).toFixed(2)],
@@ -257,6 +263,7 @@ export function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Наличные" value={fmtMoney(kpi.cash)} />
         <KpiCard label="Kaspi QR" value={fmtMoney(kpi.kaspiQR)} />
+        <KpiCard label="Halyk QR" value={fmtMoney(kpi.halykQR)} />
         <KpiCard label="Фонд ЗП" value={fmtMoney(kpi.payroll)} />
         <KpiCard label="Остаток газа" value={formatLiters(inventory.currentBalance)} danger={inventory.currentBalance < 0} />
       </div>
