@@ -141,8 +141,11 @@ export function ShiftJournal() {
   // Totals for footer
   const totalLiters = filteredShifts.reduce((s, sh) => s + sh.totalLiters, 0);
   const totalKaspiQR = filteredShifts.reduce((s, sh) => s + (sh.kaspiQR ?? 0), 0);
+  const totalHalykQR = filteredShifts.reduce((s, sh) => s + (sh.halykQR ?? 0), 0);
   const totalVoucherLiters = filteredShifts.reduce((s, sh) => s + voucherLitersOf(sh), 0);
   const totalCash = filteredShifts.reduce((s, sh) => s + sh.totalCash, 0);
+  const totalCashDebt = filteredShifts.reduce((s, sh) => s + cashDebt(sh), 0);
+  const totalVoucherDebt = filteredShifts.reduce((s, sh) => s + voucherDebt(sh), 0);
 
   return (
     <div className="space-y-4">
@@ -220,8 +223,8 @@ export function ShiftJournal() {
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[1080px]">
-            <thead>
+          <table className="w-full border-collapse min-w-[1160px]">
+            <thead className="sticky top-12 lg:top-0 z-10">
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Дата / Время
@@ -233,7 +236,10 @@ export function ShiftJournal() {
                   Реализация (л)
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  KASPI QR
+                  <span className="text-red-700">KASPI QR</span>
+                </th>
+                <th className="px-4 py-2.5 text-right text-emerald-700 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  HALYK QR
                 </th>
                 <th className="px-4 py-2.5 text-right text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Наличными (₸)
@@ -293,8 +299,11 @@ export function ShiftJournal() {
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                     {formatLiters(shift.totalLiters)}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-slate-900 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                  <td className="px-4 py-2.5 text-right font-mono text-red-700 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
                     {formatCurrency(shift.kaspiQR ?? 0)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-emerald-700 border-r border-[#edf0f5]" style={{ fontSize: '13px' }}>
+                    {formatCurrency(shift.halykQR ?? 0)}
                   </td>
                   <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${shift.totalCash < 0 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '13px' }}>
                     {formatCurrency(shift.totalCash)}
@@ -348,17 +357,24 @@ export function ShiftJournal() {
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatLiters(totalLiters)}
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
+                <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-red-800" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatCurrency(totalKaspiQR)}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-emerald-800 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>
+                  {formatCurrency(totalHalykQR)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatCurrency(totalCash)}
                 </td>
-                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
+                <td className="px-4 py-2.5 text-right font-mono text-red-800 bg-red-50/60 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>
+                  {formatCurrency(totalCashDebt)}
+                </td>
                 <td className="px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] text-slate-900" style={{ fontSize: '13px', fontWeight: 600 }}>
                   {formatLiters(totalVoucherLiters)}
                 </td>
-                <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
+                <td className="px-4 py-2.5 text-right font-mono text-red-800 bg-red-50/60 border-r border-[#edf0f5]" style={{ fontSize: '13px', fontWeight: 600 }}>
+                  {formatLiters(totalVoucherDebt)}
+                </td>
                 <td className="px-4 py-2.5 border-r border-[#edf0f5]" />
                 <td className="px-4 py-2.5" />
               </tr>

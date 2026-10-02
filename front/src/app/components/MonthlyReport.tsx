@@ -12,6 +12,7 @@ import { MonthlyOperatorStats, Operator, Shift, SHIFT_TYPE_LABELS } from '../typ
 const ALL = 'all';
 const SERVICE_MEMO_KEY = 'gazoil.report.serviceMemoByMonth';
 const KASPI_QR_KEY = 'gazoil.report.kaspiQrByMonth';
+const HALYK_QR_KEY = 'gazoil.report.halykQrByMonth';
 const PUMP_OVERRIDES_KEY = 'gazoil.report.pumpOverridesByMonth';
 const BREAKDOWN_OVERRIDES_KEY = 'gazoil.report.breakdownOverridesByMonth';
 
@@ -50,11 +51,13 @@ export function MonthlyReport() {
   const [error, setError] = useState('');
   const [serviceMemoByMonth, setServiceMemoByMonth] = useState<Record<string, string>>(() => readStoredMap(SERVICE_MEMO_KEY));
   const [kaspiQrByMonth, setKaspiQrByMonth] = useState<Record<string, string>>(() => readStoredMap(KASPI_QR_KEY));
+  const [halykQrByMonth, setHalykQrByMonth] = useState<Record<string, string>>(() => readStoredMap(HALYK_QR_KEY));
   const [pumpOverridesByMonth, setPumpOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(PUMP_OVERRIDES_KEY));
   const [breakdownOverridesByMonth, setBreakdownOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(BREAKDOWN_OVERRIDES_KEY));
   const [isReportEditing, setIsReportEditing] = useState(false);
   const [draftServiceMemo, setDraftServiceMemo] = useState('');
   const [draftKaspiQr, setDraftKaspiQr] = useState('');
+  const [draftHalykQr, setDraftHalykQr] = useState('');
   const [draftPumpOverrides, setDraftPumpOverrides] = useState<Record<string, string>>({});
   const [draftBreakdownOverrides, setDraftBreakdownOverrides] = useState<Record<string, string>>({});
 
@@ -77,6 +80,10 @@ export function MonthlyReport() {
   useEffect(() => {
     window.localStorage.setItem(KASPI_QR_KEY, JSON.stringify(kaspiQrByMonth));
   }, [kaspiQrByMonth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(HALYK_QR_KEY, JSON.stringify(halykQrByMonth));
+  }, [halykQrByMonth]);
 
   useEffect(() => {
     window.localStorage.setItem(PUMP_OVERRIDES_KEY, JSON.stringify(pumpOverridesByMonth));
@@ -251,8 +258,10 @@ export function MonthlyReport() {
     const serviceMemoInput = isReportEditing ? draftServiceMemo : serviceMemoByMonth[selectedMonth] ?? '';
     const serviceMemo = parseMoneyInput(serviceMemoInput);
     const kaspiQrInput = isReportEditing ? draftKaspiQr : kaspiQrByMonth[selectedMonth] ?? '';
+    const halykQrInput = isReportEditing ? draftHalykQr : halykQrByMonth[selectedMonth] ?? '';
     const effectiveKaspiQR = kaspiQrInput.trim() === '' ? autoKaspiQR : parseMoneyInput(kaspiQrInput);
-    const cashToDeposit = round2(totalRevenue - effectiveKaspiQR - kaspiTransfer - halykQR - halykTransfer - serviceMemo);
+    const effectiveHalykQR = halykQrInput.trim() === '' ? halykQR : parseMoneyInput(halykQrInput);
+    const cashToDeposit = round2(totalRevenue - effectiveKaspiQR - kaspiTransfer - effectiveHalykQR - halykTransfer - serviceMemo);
 
     return {
       pumpRows,
@@ -271,6 +280,7 @@ export function MonthlyReport() {
       totalRevenue,
       autoKaspiQR,
       effectiveKaspiQR,
+      effectiveHalykQR,
       kaspiTransfer,
       halykQR,
       halykTransfer,
@@ -279,7 +289,7 @@ export function MonthlyReport() {
       regularPriceLabel: regularPriceSet.size === 1 ? `${formatNumber([...regularPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
       discountPriceLabel: discountPriceSet.size === 1 ? `${formatNumber([...discountPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
     };
-  }, [monthShifts, selectedMonth, serviceMemoByMonth, kaspiQrByMonth, pumpOverridesByMonth, breakdownOverridesByMonth, isReportEditing, draftServiceMemo, draftKaspiQr, draftPumpOverrides, draftBreakdownOverrides]);
+  }, [monthShifts, selectedMonth, serviceMemoByMonth, kaspiQrByMonth, halykQrByMonth, pumpOverridesByMonth, breakdownOverridesByMonth, isReportEditing, draftServiceMemo, draftKaspiQr, draftHalykQr, draftPumpOverrides, draftBreakdownOverrides]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -330,6 +340,7 @@ export function MonthlyReport() {
     operators.find(op => op.id === selectedOperator)?.name || '';
   const serviceMemoInput = isReportEditing ? draftServiceMemo : serviceMemoByMonth[selectedMonth] ?? '';
   const kaspiQrInput = isReportEditing ? draftKaspiQr : kaspiQrByMonth[selectedMonth] ?? '';
+  const halykQrInput = isReportEditing ? draftHalykQr : halykQrByMonth[selectedMonth] ?? '';
   const pumpOverrides = isReportEditing ? draftPumpOverrides : pumpOverridesByMonth[selectedMonth] ?? {};
   const breakdownOverrides = isReportEditing ? draftBreakdownOverrides : breakdownOverridesByMonth[selectedMonth] ?? {};
 
@@ -341,6 +352,7 @@ export function MonthlyReport() {
   const handleStartReportEdit = () => {
     setDraftServiceMemo(serviceMemoByMonth[selectedMonth] ?? '');
     setDraftKaspiQr(kaspiQrByMonth[selectedMonth] ?? '');
+    setDraftHalykQr(halykQrByMonth[selectedMonth] ?? '');
     setDraftPumpOverrides(pumpOverridesByMonth[selectedMonth] ?? {});
     setDraftBreakdownOverrides(breakdownOverridesByMonth[selectedMonth] ?? {});
     setIsReportEditing(true);
@@ -349,6 +361,7 @@ export function MonthlyReport() {
   const handleSaveReportEdit = () => {
     setServiceMemoByMonth(prev => ({ ...prev, [selectedMonth]: draftServiceMemo }));
     setKaspiQrByMonth(prev => ({ ...prev, [selectedMonth]: draftKaspiQr }));
+    setHalykQrByMonth(prev => ({ ...prev, [selectedMonth]: draftHalykQr }));
     setPumpOverridesByMonth(prev => ({ ...prev, [selectedMonth]: draftPumpOverrides }));
     setBreakdownOverridesByMonth(prev => ({ ...prev, [selectedMonth]: draftBreakdownOverrides }));
     setIsReportEditing(false);
@@ -407,7 +420,7 @@ export function MonthlyReport() {
         <tr><td>По ${calc.discountPriceLabel}</td><td style="text-align:right">${liters(calc.discountLiters)} л = ${money(calc.discountAmount)} ₸</td></tr>
         <tr><td>Kaspi QR</td><td style="text-align:right">${money(calc.effectiveKaspiQR)} ₸</td></tr>
         <tr><td>Kaspi перевод</td><td style="text-align:right">${money(calc.kaspiTransfer)} ₸</td></tr>
-        <tr><td>Halyk QR</td><td style="text-align:right">${money(calc.halykQR)} ₸</td></tr>
+        <tr><td>Halyk QR</td><td style="text-align:right">${money(calc.effectiveHalykQR)} ₸</td></tr>
         <tr><td>Halyk перевод</td><td style="text-align:right">${money(calc.halykTransfer)} ₸</td></tr>
         <tr><td>Служебная записка</td><td style="text-align:right">${money(calc.serviceMemo)} ₸</td></tr>
         <tr><td><b>К внесению в кассу</b></td><td style="text-align:right"><b>${money(calc.cashToDeposit)} ₸</b></td></tr>
@@ -856,8 +869,8 @@ export function MonthlyReport() {
                       <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.kaspiTransfer)}</div>
                     </div>
                     <div>
-                       <div className={`${calcLabel} text-emerald-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Halyk QR</div>
-                      <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.halykQR)}</div>
+                        <div className={`${calcLabel} text-emerald-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Halyk QR</div>
+                       <div className={calcValue} style={{ fontSize: '14px', fontWeight: 700 }}>{formatCurrency(reportCalculator.effectiveHalykQR)}</div>
                     </div>
                     <div>
                        <div className={`${calcLabel} text-emerald-700`} style={{ fontSize: '10px', fontWeight: 700 }}>Halyk перевод</div>
@@ -865,20 +878,35 @@ export function MonthlyReport() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
+                     <div className="space-y-1.5">
                     <Label htmlFor="reportKaspiQr" className="text-red-700" style={{ fontSize: '12px', fontWeight: 600 }}>Kaspi QR, ₸</Label>
                     <Input
-                      id="reportKaspiQr"
+                       id="reportKaspiQr"
                       inputMode="decimal"
                       value={kaspiQrInput}
                       onChange={event => setDraftKaspiQr(event.target.value)}
                       placeholder={formatNumber(reportCalculator.autoKaspiQR, 2)}
                       disabled={!isReportEditing}
-                      className="h-8 bg-white border-[#d1d9e6] font-mono text-right"
+                       className="h-8 bg-white border-red-300 font-mono text-right focus-visible:ring-red-300"
                       style={{ fontSize: '13px' }}
                     />
-                    <div className="text-slate-500" style={{ fontSize: '11px' }}>Пусто = автоматически {formatCurrency(reportCalculator.autoKaspiQR)}</div>
-                  </div>
+                     <div className="text-slate-500" style={{ fontSize: '11px' }}>Пусто = автоматически {formatCurrency(reportCalculator.autoKaspiQR)}</div>
+                   </div>
+
+                   <div className="space-y-1.5">
+                     <Label htmlFor="reportHalykQr" className="text-emerald-700" style={{ fontSize: '12px', fontWeight: 600 }}>Halyk QR, ₸</Label>
+                     <Input
+                       id="reportHalykQr"
+                       inputMode="decimal"
+                       value={halykQrInput}
+                       onChange={event => setDraftHalykQr(event.target.value)}
+                       placeholder={formatNumber(reportCalculator.halykQR, 2)}
+                       disabled={!isReportEditing}
+                       className="h-8 bg-white border-emerald-300 font-mono text-right focus-visible:ring-emerald-300"
+                       style={{ fontSize: '13px' }}
+                     />
+                     <div className="text-slate-500" style={{ fontSize: '11px' }}>Пусто = автоматически {formatCurrency(reportCalculator.halykQR)}</div>
+                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="serviceMemo" className="text-slate-600" style={{ fontSize: '12px' }}>Служебная записка, ₸</Label>
