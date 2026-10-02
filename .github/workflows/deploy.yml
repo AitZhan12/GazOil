@@ -25,7 +25,8 @@ jobs:
 
             cd /root/GAZ/GazOil
 
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             docker compose down
             docker compose up -d --build
