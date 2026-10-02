@@ -222,7 +222,7 @@ export function ShiftJournal() {
         </div>
       ) : (
         <div className="bg-white border border-[#d1d9e6] rounded-lg">
-          <div className="overflow-x-auto">
+          <div className="journal-table-wrap">
           <table className="journal-table w-full border-separate border-spacing-0 min-w-[1160px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">

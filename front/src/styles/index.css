@@ -9,8 +9,16 @@
   background: #f8fafc;
 }
 
+.journal-table-wrap {
+  overflow-x: visible;
+}
+
 @media (max-width: 1023px) {
+  .journal-table-wrap {
+    overflow-x: auto;
+  }
+
   .journal-table thead th {
-    top: 118px;
+    top: 0;
   }
 }
