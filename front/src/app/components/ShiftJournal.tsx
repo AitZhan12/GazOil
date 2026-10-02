@@ -221,10 +221,10 @@ export function ShiftJournal() {
           </Link>
         </div>
       ) : (
-        <div className="bg-white border border-[#d1d9e6] rounded-lg overflow-hidden">
+        <div className="bg-white border border-[#d1d9e6] rounded-lg">
           <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[1160px]">
-            <thead className="sticky top-12 lg:top-0 z-10">
+          <table className="journal-table w-full border-separate border-spacing-0 min-w-[1160px]">
+            <thead>
               <tr className="bg-[#f8fafc] border-b border-[#d1d9e6]">
                 <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Дата / Время

@@ -1,3 +1,16 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+.journal-table thead th {
+  position: sticky;
+  top: 76px;
+  z-index: 10;
+  background: #f8fafc;
+}
+
+@media (max-width: 1023px) {
+  .journal-table thead th {
+    top: 118px;
+  }
+}
