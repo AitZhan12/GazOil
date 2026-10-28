@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, Save, AlertTriangle, Fuel, Upload } from 'lucide-react';
 import { Button } from './ui/button';
@@ -35,20 +35,72 @@ function endDateForType(type: ShiftType, isoStart: string): string {
   return type === 'night' || type === 'full' ? addDaysIso(isoStart, 1) : isoStart;
 }
 
-function maskRuDate(input: string): string {
-  const d = input.replace(/\D/g, '').slice(0, 8);
-  let out = d.slice(0, 2);
-  if (d.length > 2) out += '.' + d.slice(2, 4);
-  if (d.length > 4) out += '.' + d.slice(4, 8);
-  return out;
-}
+type DateInputProps = {
+  id: string;
+  value: string;
+  onChange: (iso: string) => void;
+  hasError?: boolean;
+};
 
-function ruToIso(ru: string): string {
-  const m = ru.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!m) return '';
-  const [, dd, mm, yyyy] = m;
-  if (+mm < 1 || +mm > 12 || +dd < 1 || +dd > 31) return '';
-  return `${yyyy}-${mm}-${dd}`;
+// Отдельные сегменты позволяют заменить, например, только день или месяц.
+function DateInput({ id, value, onChange, hasError }: DateInputProps) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const [segments, setSegments] = useState({
+    day: match?.[3] ?? '',
+    month: match?.[2] ?? '',
+    year: match?.[1] ?? '',
+  });
+  const dayRef = useRef<HTMLInputElement>(null);
+  const monthRef = useRef<HTMLInputElement>(null);
+  const yearRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const next = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    setSegments({ day: next?.[3] ?? '', month: next?.[2] ?? '', year: next?.[1] ?? '' });
+  }, [value]);
+
+  const updateSegment = (name: keyof typeof segments, nextValue: string) => {
+    const next = { ...segments, [name]: nextValue.replace(/\D/g, '').slice(0, name === 'year' ? 4 : 2) };
+    setSegments(next);
+    if (next.day.length === 2 && next.month.length === 2 && next.year.length === 4) {
+      onChange(`${next.year}-${next.month}-${next.day}`);
+    }
+  };
+
+  const fields = [
+    { name: 'day' as const, label: 'День', maxLength: 2, ref: dayRef, width: 'w-7' },
+    { name: 'month' as const, label: 'Месяц', maxLength: 2, ref: monthRef, width: 'w-7' },
+    { name: 'year' as const, label: 'Год', maxLength: 4, ref: yearRef, width: 'w-12' },
+  ];
+
+  return (
+    <div className={`mt-1 flex h-8 items-center rounded-md border bg-[#f8fafc] px-2 font-mono ${hasError ? 'border-red-400' : 'border-[#d1d9e6]'}`}>
+      {fields.map((field, index) => (
+        <Fragment key={field.name}>
+          {index > 0 && <span className="text-slate-400">.</span>}
+          <input
+            ref={field.ref}
+            id={index === 0 ? id : undefined}
+            aria-label={field.label}
+            inputMode="numeric"
+            maxLength={field.maxLength}
+            value={segments[field.name]}
+            onFocus={event => event.currentTarget.select()}
+            onChange={event => {
+              updateSegment(field.name, event.target.value);
+              if (event.target.value.replace(/\D/g, '').length === field.maxLength && index < fields.length - 1) {
+                fields[index + 1].ref.current?.focus();
+              }
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Backspace' && !segments[field.name] && index > 0) fields[index - 1].ref.current?.focus();
+            }}
+            className={`${field.width} border-0 bg-transparent p-0 text-center text-[13px] text-slate-700 outline-none`}
+          />
+        </Fragment>
+      ))}
+    </div>
+  );
 }
 
 // Время — 24-часовое ЧЧ:ММ (внутренний формат HH:MM совпадает с отображаемым).
@@ -476,11 +528,9 @@ export function ShiftForm() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="startDate" className="required text-slate-600" style={{ fontSize: '12px' }}>Дата начала</Label>
-                  <Input id="startDate" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" value={startDateText}
-                    onChange={e => {
-                      const v = maskRuDate(e.target.value);
-                      setStartDateText(v);
-                      const iso = ruToIso(v);
+                  <DateInput id="startDate" value={startDate} hasError={!!errors.startDate}
+                    onChange={iso => {
+                      setStartDateText(isoToRu(iso));
                       setStartDate(iso);
                       // Подсказка даты конца по типу смены (только для новой смены).
                       if (!isEditing && iso) {
@@ -488,8 +538,7 @@ export function ShiftForm() {
                         setEndDate(endIso);
                         setEndDateText(isoToRu(endIso));
                       }
-                    }}
-                    className={`h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] mt-1 ${errors.startDate ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} />
+                    }} />
                 </div>
                 <div>
                   <Label htmlFor="startTime" className="required text-slate-600" style={{ fontSize: '12px' }}>Время начала</Label>
@@ -526,9 +575,8 @@ export function ShiftForm() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="endDate" className="required text-slate-600" style={{ fontSize: '12px' }}>Дата конца</Label>
-                  <Input id="endDate" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" value={endDateText}
-                    onChange={e => { const v = maskRuDate(e.target.value); setEndDateText(v); setEndDate(ruToIso(v)); }}
-                    className={`h-8 font-mono border-[#d1d9e6] bg-[#f8fafc] mt-1 ${errors.endDate ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} />
+                  <DateInput id="endDate" value={endDate} hasError={!!errors.endDate}
+                    onChange={iso => { setEndDateText(isoToRu(iso)); setEndDate(iso); }} />
                 </div>
                 <div>
                   <Label htmlFor="endTime" className="required text-slate-600" style={{ fontSize: '12px' }}>Время конца</Label>
