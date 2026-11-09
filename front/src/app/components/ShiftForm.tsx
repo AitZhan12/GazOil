@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { getOperators, getShifts, getShiftById, addShift, updateShift, getSettings, getFuelPrice, getDeliveries, getTankResets, parseShiftDocument } from '../lib/storage';
 import { calculateShiftFields, formatCurrency, formatLiters, formatNumber, salaryRateFor, bonusForLiters } from '../lib/calculations';
 import { getLastPumpReadings } from '../lib/shift-helpers';
+import { getCurrentUser } from '../lib/auth';
 import { balanceAroundShift } from '../lib/inventory';
 import { Shift, PumpReading, Operator, AppSettings, GasDelivery, TankReset, ShiftType, SHIFT_TYPE_LABELS } from '../types';
 
@@ -120,6 +121,7 @@ export function ShiftForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
+  const pumpCount = getCurrentUser().pumpCount;
 
   const [operators, setOperators] = useState<Operator[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -270,7 +272,7 @@ export function ShiftForm() {
           setRegularPrice(String(price.basePrice));
           const lastReadings = await getLastPumpReadings();
           if (cancelled) return;
-          if (lastReadings && lastReadings.length === 3) {
+          if (lastReadings && lastReadings.length >= pumpCount) {
             const ends = lastReadings.map(r => r.end);
             // Контроль непрерывности включаем только при наличии реальной прошлой смены
             // (иначе на самой первой смене был бы ложный «разрыв» против нулей).
@@ -297,7 +299,7 @@ export function ShiftForm() {
     { start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0 },
     { start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0 },
     { start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0 },
-  ];
+  ].slice(0, pumpCount);
 
   const dPrice = parseFloat(discountPrice) || 0;
   const bPrice = parseFloat(regularPrice) || 0;
@@ -318,7 +320,7 @@ export function ShiftForm() {
   // Контроль непрерывности: «начало» новой смены должно совпасть с «концом» прошлой.
   // Если оператор изменил подставленное значение — это сигнал (опечатка/пропуск смены).
   const continuityMismatches = (!isEditing && expectedStarts)
-    ? [pump1Start, pump2Start, pump3Start]
+     ? [pump1Start, pump2Start, pump3Start].slice(0, pumpCount)
         .map((s, i) => ({ pump: i + 1, entered: parseFloat(s) || 0, expected: expectedStarts[i] }))
         .filter(m => Math.abs(m.entered - m.expected) > 0.005)
     : [];
@@ -371,7 +373,7 @@ export function ShiftForm() {
     else if (!isValidTime(endTime)) newErrors.endTime = 'Время в формате ЧЧ:ММ';
     if (pump1Volume < 0) newErrors.pump1 = 'Конец смены должен быть больше начала';
     if (pump2Volume < 0) newErrors.pump2 = 'Конец смены должен быть больше начала';
-    if (pump3Volume < 0) newErrors.pump3 = 'Конец смены должен быть больше начала';
+     if (pumpCount >= 3 && pump3Volume < 0) newErrors.pump3 = 'Конец смены должен быть больше начала';
     const startDateTime = new Date(`${startDate}T${startTime}`);
     const endDateTime = new Date(`${endDate}T${endTime}`);
     if (endDateTime <= startDateTime) newErrors.endTime = 'Время окончания должно быть позже времени начала';
@@ -387,7 +389,7 @@ export function ShiftForm() {
       { pumpNumber: 1, start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0, volume: pump1Volume },
       { pumpNumber: 2, start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0, volume: pump2Volume },
       { pumpNumber: 3, start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0, volume: pump3Volume },
-    ];
+    ].slice(0, pumpCount);
     const shift: Shift = {
       id: isEditing ? (id as string) : '',
       operatorId, receivedById: receivedById || undefined,
@@ -625,7 +627,7 @@ export function ShiftForm() {
                   { num: 1, start: pump1Start, setStart: setPump1Start, end: pump1End, setEnd: setPump1End, volume: pump1Volume, err: errors.pump1 },
                   { num: 2, start: pump2Start, setStart: setPump2Start, end: pump2End, setEnd: setPump2End, volume: pump2Volume, err: errors.pump2 },
                   { num: 3, start: pump3Start, setStart: setPump3Start, end: pump3End, setEnd: setPump3End, volume: pump3Volume, err: errors.pump3 },
-                ].map(pump => (
+                ].slice(0, pumpCount).map(pump => (
                   <tr key={pump.num} className="border-b border-[#edf0f5]">
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
                       <span className="inline-flex items-center justify-center size-6 rounded bg-slate-100 text-slate-700" style={{ fontSize: '12px', fontWeight: 600 }}>{pump.num}</span>
@@ -656,7 +658,7 @@ export function ShiftForm() {
               </tfoot>
             </table>
           </div>
-          {(errors.pump1 || errors.pump2 || errors.pump3) && (
+           {(errors.pump1 || errors.pump2 || (pumpCount >= 3 && errors.pump3)) && (
             <div className="px-5 py-2 flex items-center gap-1.5 text-red-600" style={{ fontSize: '12px' }}>
               <AlertTriangle className="size-3.5" />
               {errors.pump1 || errors.pump2 || errors.pump3}

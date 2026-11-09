@@ -19,6 +19,9 @@ public class Station {
     @Column(nullable = false)
     private String name;
 
+    @Column(name = "pump_count", nullable = false)
+    private short pumpCount = 3;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

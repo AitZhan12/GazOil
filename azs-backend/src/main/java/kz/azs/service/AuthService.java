@@ -7,18 +7,22 @@ import kz.azs.repo.AppUserRepository;
 import kz.azs.web.UnauthorizedException;
 import kz.azs.web.dto.AuthResponse;
 import kz.azs.web.dto.LoginRequest;
+import kz.azs.web.dto.StationInfo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 @Transactional
 public class AuthService {
 
     private static final String TOKEN_HEADER = "X-Auth-Token";
+    private static final String STATION_HEADER = "X-Station-Id";
 
     private final AppUserRepository users;
     private final HttpServletRequest request;
@@ -53,11 +57,42 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public Station currentStation() {
-        return currentUser().getStation();
+        AppUser user = currentUser();
+        String requested = request.getHeader(STATION_HEADER);
+        if (requested == null || requested.isBlank()) {
+            return user.getStation();
+        }
+
+        long stationId;
+        try {
+            stationId = Long.parseLong(requested.trim());
+        } catch (NumberFormatException e) {
+            throw new UnauthorizedException("Некорректная выбранная заправка");
+        }
+        return user.getStations().stream()
+                .filter(station -> station.getId().equals(stationId))
+                .findFirst()
+                .orElseThrow(() -> new UnauthorizedException("Нет доступа к выбранной заправке"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<StationInfo> availableStations() {
+        return currentUser().getStations().stream()
+                .sorted(Comparator.comparing(Station::getId))
+                .map(station -> new StationInfo(
+                        station.getId(), station.getName(), station.getPumpCount()))
+                .toList();
     }
 
     private static AuthResponse toResponse(AppUser user) {
-        return new AuthResponse(user.getApiToken(), user.getUsername(), user.getStation().getName());
+        Station station = user.getStation();
+        List<StationInfo> stations = user.getStations().stream()
+                .sorted(Comparator.comparing(Station::getId))
+                .map(s -> new StationInfo(s.getId(), s.getName(), s.getPumpCount()))
+                .toList();
+        return new AuthResponse(
+                user.getApiToken(), user.getUsername(), station.getId(), station.getName(),
+                station.getPumpCount(), stations);
     }
 
     private static String hash(String salt, String password) {

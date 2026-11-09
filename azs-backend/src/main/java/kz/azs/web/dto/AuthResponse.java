@@ -1,4 +1,13 @@
 package kz.azs.web.dto;
 
-public record AuthResponse(String token, String username, String stationName) {
+import java.util.List;
+
+public record AuthResponse(
+        String token,
+        String username,
+        Long stationId,
+        String stationName,
+        int pumpCount,
+        List<StationInfo> stations
+) {
 }

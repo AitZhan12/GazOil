@@ -8,6 +8,7 @@ import { getShifts, getOperators } from '../lib/storage';
 import { formatCurrency, formatLiters, formatNumber, round2 } from '../lib/calculations';
 import { downloadExcel, printPdf } from '../lib/export';
 import { MonthlyOperatorStats, Operator, Shift, SHIFT_TYPE_LABELS } from '../types';
+import { getCurrentUser } from '../lib/auth';
 
 const ALL = 'all';
 const SERVICE_MEMO_KEY = 'gazoil.report.serviceMemoByMonth';
@@ -15,6 +16,10 @@ const KASPI_QR_KEY = 'gazoil.report.kaspiQrByMonth';
 const HALYK_QR_KEY = 'gazoil.report.halykQrByMonth';
 const PUMP_OVERRIDES_KEY = 'gazoil.report.pumpOverridesByMonth';
 const BREAKDOWN_OVERRIDES_KEY = 'gazoil.report.breakdownOverridesByMonth';
+
+function stationScopedKey(key: string): string {
+  return `${key}.${getCurrentUser().stationId ?? 'default'}`;
+}
 
 type PumpOverrideField = 'start' | 'end';
 type BreakdownOverrideField = 'totalLiters' | 'voucherLiters' | 'cardLiters' | 'discountLiters';
@@ -40,6 +45,12 @@ function readStoredNestedMap(key: string): Record<string, Record<string, string>
 }
 
 export function MonthlyReport() {
+  const pumpCount = getCurrentUser().pumpCount;
+  const serviceMemoKey = stationScopedKey(SERVICE_MEMO_KEY);
+  const kaspiQrKey = stationScopedKey(KASPI_QR_KEY);
+  const halykQrKey = stationScopedKey(HALYK_QR_KEY);
+  const pumpOverridesKey = stationScopedKey(PUMP_OVERRIDES_KEY);
+  const breakdownOverridesKey = stationScopedKey(BREAKDOWN_OVERRIDES_KEY);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -49,11 +60,11 @@ export function MonthlyReport() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [error, setError] = useState('');
-  const [serviceMemoByMonth, setServiceMemoByMonth] = useState<Record<string, string>>(() => readStoredMap(SERVICE_MEMO_KEY));
-  const [kaspiQrByMonth, setKaspiQrByMonth] = useState<Record<string, string>>(() => readStoredMap(KASPI_QR_KEY));
-  const [halykQrByMonth, setHalykQrByMonth] = useState<Record<string, string>>(() => readStoredMap(HALYK_QR_KEY));
-  const [pumpOverridesByMonth, setPumpOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(PUMP_OVERRIDES_KEY));
-  const [breakdownOverridesByMonth, setBreakdownOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(BREAKDOWN_OVERRIDES_KEY));
+  const [serviceMemoByMonth, setServiceMemoByMonth] = useState<Record<string, string>>(() => readStoredMap(serviceMemoKey));
+  const [kaspiQrByMonth, setKaspiQrByMonth] = useState<Record<string, string>>(() => readStoredMap(kaspiQrKey));
+  const [halykQrByMonth, setHalykQrByMonth] = useState<Record<string, string>>(() => readStoredMap(halykQrKey));
+  const [pumpOverridesByMonth, setPumpOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(pumpOverridesKey));
+  const [breakdownOverridesByMonth, setBreakdownOverridesByMonth] = useState<Record<string, Record<string, string>>>(() => readStoredNestedMap(breakdownOverridesKey));
   const [isReportEditing, setIsReportEditing] = useState(false);
   const [draftServiceMemo, setDraftServiceMemo] = useState('');
   const [draftKaspiQr, setDraftKaspiQr] = useState('');
@@ -74,23 +85,23 @@ export function MonthlyReport() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(SERVICE_MEMO_KEY, JSON.stringify(serviceMemoByMonth));
+    window.localStorage.setItem(serviceMemoKey, JSON.stringify(serviceMemoByMonth));
   }, [serviceMemoByMonth]);
 
   useEffect(() => {
-    window.localStorage.setItem(KASPI_QR_KEY, JSON.stringify(kaspiQrByMonth));
+    window.localStorage.setItem(kaspiQrKey, JSON.stringify(kaspiQrByMonth));
   }, [kaspiQrByMonth]);
 
   useEffect(() => {
-    window.localStorage.setItem(HALYK_QR_KEY, JSON.stringify(halykQrByMonth));
+    window.localStorage.setItem(halykQrKey, JSON.stringify(halykQrByMonth));
   }, [halykQrByMonth]);
 
   useEffect(() => {
-    window.localStorage.setItem(PUMP_OVERRIDES_KEY, JSON.stringify(pumpOverridesByMonth));
+    window.localStorage.setItem(pumpOverridesKey, JSON.stringify(pumpOverridesByMonth));
   }, [pumpOverridesByMonth]);
 
   useEffect(() => {
-    window.localStorage.setItem(BREAKDOWN_OVERRIDES_KEY, JSON.stringify(breakdownOverridesByMonth));
+    window.localStorage.setItem(breakdownOverridesKey, JSON.stringify(breakdownOverridesByMonth));
   }, [breakdownOverridesByMonth]);
 
   // Generate month options (last 12 months)
@@ -218,7 +229,7 @@ export function MonthlyReport() {
     const pumpOverrides = isReportEditing ? draftPumpOverrides : pumpOverridesByMonth[selectedMonth] ?? {};
     const breakdownOverrides = isReportEditing ? draftBreakdownOverrides : breakdownOverridesByMonth[selectedMonth] ?? {};
 
-    const pumpRows = [1, 2, 3].map(pumpNumber => {
+    const pumpRows = Array.from({ length: pumpCount }, (_, index) => index + 1).map(pumpNumber => {
       const withPump = monthShifts.filter(shift => shift.pumps.some(pump => pump.pumpNumber === pumpNumber));
       const first = withPump[0]?.pumps.find(pump => pump.pumpNumber === pumpNumber);
       const last = withPump[withPump.length - 1]?.pumps.find(pump => pump.pumpNumber === pumpNumber);

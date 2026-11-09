@@ -1,5 +1,5 @@
 import { AppSettings, FuelPrice, GasDelivery, Operator, Shift, TankReset, WaterRecord } from '../types';
-import { getAuthToken, logout } from './auth';
+import { getAuthToken, getCurrentUser, logout } from './auth';
 
 // База API бэка (Spring Boot). Можно переопределить через VITE_API_URL.
 const API_BASE: string =
@@ -12,6 +12,7 @@ async function http<T>(path: string, options?: RequestInit): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { 'X-Auth-Token': token } : {}),
+      ...(getCurrentUser().stationId ? { 'X-Station-Id': getCurrentUser().stationId! } : {}),
       ...(options?.headers ?? {}),
     },
   });
@@ -36,7 +37,10 @@ export async function parseShiftDocument(file: File): Promise<Record<string, unk
   const token = getAuthToken();
   const res = await fetch(`${API_BASE}/documents/parse`, {
     method: 'POST',
-    headers: token ? { 'X-Auth-Token': token } : {},
+    headers: {
+      ...(token ? { 'X-Auth-Token': token } : {}),
+      ...(getCurrentUser().stationId ? { 'X-Station-Id': getCurrentUser().stationId! } : {}),
+    },
     body: form,
   });
   if (!res.ok) {

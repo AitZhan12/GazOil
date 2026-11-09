@@ -142,6 +142,9 @@ public class ShiftService {
 
         if (dto.pumps() != null) {
             for (PumpReadingDto p : dto.pumps()) {
+                if (p.pumpNumber() < 1 || p.pumpNumber() > shift.getStation().getPumpCount()) {
+                    throw new IllegalArgumentException("Для этой заправки доступно колонок: " + shift.getStation().getPumpCount());
+                }
                 // пустые строки колонок (нет начала и конца) не сохраняем
                 BigDecimal start = nz(p.start());
                 BigDecimal end = nz(p.end());

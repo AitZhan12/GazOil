@@ -1,16 +1,17 @@
 import { getShifts } from './storage';
 import { PumpReading } from '../types';
+import { getCurrentUser } from './auth';
 
-const EMPTY_READINGS: PumpReading[] = [
-  { pumpNumber: 1, start: 0, end: 0, volume: 0 },
-  { pumpNumber: 2, start: 0, end: 0, volume: 0 },
-  { pumpNumber: 3, start: 0, end: 0, volume: 0 },
-];
+function emptyReadings(): PumpReading[] {
+  return Array.from({ length: getCurrentUser().pumpCount }, (_, index) => ({
+    pumpNumber: index + 1, start: 0, end: 0, volume: 0,
+  }));
+}
 
 export async function getLastPumpReadings(): Promise<PumpReading[]> {
   const shifts = await getShifts();
   if (shifts.length === 0) {
-    return EMPTY_READINGS;
+    return emptyReadings();
   }
 
   // Sort by date/time descending

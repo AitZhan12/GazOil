@@ -9,6 +9,7 @@ import { getDeliveries, addDelivery, updateDelivery, deleteDelivery, getShifts, 
 import { formatLiters, formatNumber } from '../lib/calculations';
 import { buildInventoryTimeline, reconcileResets, reconcileResetDetail } from '../lib/inventory';
 import { AppSettings, GasDelivery, Shift, TankReset } from '../types';
+import { getCurrentUser } from '../lib/auth';
 
 // Дата ДД.ММ.ГГГГ ↔ ISO, время ЧЧ:ММ — те же маски, что и в форме смены.
 function isoToRu(iso: string): string {
@@ -41,6 +42,7 @@ function isValidTime(t: string): boolean {
 }
 
 export function Deliveries() {
+  const pumpCount = getCurrentUser().pumpCount;
   const [deliveries, setDeliveries] = useState<GasDelivery[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [resets, setResets] = useState<TankReset[]>([]);
@@ -69,7 +71,7 @@ export function Deliveries() {
   const [resetDateText, setResetDateText] = useState('');
   const [resetTime, setResetTime] = useState('');
   const [resetNote, setResetNote] = useState('');
-  const [resetPumps, setResetPumps] = useState<string[]>(['', '', '']); // показания колонок 1,2,3
+  const [resetPumps, setResetPumps] = useState<string[]>(() => Array(pumpCount).fill(''));
 
   // Разбор сверки конкретного обнуления.
   const [detailReset, setDetailReset] = useState<TankReset | null>(null);
@@ -244,7 +246,7 @@ export function Deliveries() {
     setResetDateText(isoToRu(now.toISOString().split('T')[0]));
     setResetTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
     setResetNote('');
-    setResetPumps(['', '', '']);
+    setResetPumps(Array(pumpCount).fill(''));
     setIsResetOpen(true);
   };
 
@@ -636,7 +638,7 @@ export function Deliveries() {
             </div>
             <div>
               <Label className="text-slate-600" style={{ fontSize: '12px' }}>Показания колонок</Label>
-              <div className="mt-1 grid grid-cols-3 gap-2">
+                <div className={`mt-1 grid gap-2 ${pumpCount === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                 {resetPumps.map((val, i) => (
                   <div key={i}>
                     <Input type="number" step="0.01" placeholder={`Колонка ${i + 1}`} value={val}

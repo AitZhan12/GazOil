@@ -4,6 +4,12 @@ export interface Operator {
   active: boolean;
 }
 
+export interface StationInfo {
+  id: string;
+  name: string;
+  pumpCount: number;
+}
+
 export interface PumpReading {
   pumpNumber: number;
   start: number;
@@ -113,7 +119,7 @@ export interface TankReset {
   date: string;          // ISO ГГГГ-ММ-ДД
   time: string;          // ЧЧ:ММ
   note?: string;
-  pumpReadings: number[]; // показания колонок 1,2,3 на момент обнуления
+  pumpReadings: number[]; // показания колонок станции на момент обнуления
 }
 
 export interface MonthlyOperatorStats {

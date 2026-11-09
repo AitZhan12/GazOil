@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router';
 import { FileText, BarChart3, LayoutDashboard, Users, Settings as SettingsIcon, Fuel, Droplet, LogOut, Menu, X } from 'lucide-react';
-import { getCurrentUser, isAuthed, logout } from '../lib/auth';
+import { fetchAvailableStations, getAvailableStations, getCurrentUser, isAuthed, logout, selectStation } from '../lib/auth';
 
 export function Root() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const currentUser = getCurrentUser();
+  const [stations, setStations] = useState(getAvailableStations);
 
   // Закрываем мобильное меню при смене маршрута.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isAuthed()) return;
+    fetchAvailableStations().then(next => {
+      setStations(next);
+      if (!getCurrentUser().stationId && next[0]) {
+        selectStation(next[0]);
+        window.location.reload();
+      }
+    }).catch(() => { /* основной API всё равно покажет авторизационную ошибку */ });
+  }, []);
 
   // Гейт: не вошёл — на страницу входа (с возвратом на запрошенный путь).
   if (!isAuthed()) {
@@ -20,6 +32,13 @@ export function Root() {
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleStationChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const station = stations.find(item => item.id === event.target.value);
+    if (!station || station.id === currentUser.stationId) return;
+    selectStation(station);
+    window.location.reload();
   };
 
   const isActive = (path: string) => {
@@ -111,6 +130,17 @@ export function Root() {
 
         {/* Footer */}
         <div className="px-3 py-4 border-t border-[#1e293b] space-y-3">
+          {stations.length > 1 && (
+            <select
+              value={currentUser.stationId ?? ''}
+              onChange={handleStationChange}
+              className="w-full rounded border border-[#334155] bg-[#1e293b] px-2 py-1.5 text-slate-200 outline-none"
+              style={{ fontSize: '11px' }}
+              aria-label="Выбрать заправку"
+            >
+              {stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}
+            </select>
+          )}
           <button
             type="button"
             onClick={handleLogout}
