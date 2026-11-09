@@ -40,6 +40,7 @@ public class TankResetService {
     }
 
     public TankResetDto create(TankResetDto dto) {
+        auth.requireAdmin();
         TankReset r = new TankReset();
         r.setStation(auth.currentStation());
         apply(r, dto);
@@ -48,6 +49,7 @@ public class TankResetService {
     }
 
     public TankResetDto update(Long id, TankResetDto dto) {
+        auth.requireAdmin();
         TankReset r = resets.findByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Обнуление не найдено: " + id));
         apply(r, dto);
@@ -60,6 +62,7 @@ public class TankResetService {
     }
 
     public void delete(Long id) {
+        auth.requireAdmin();
         Station station = auth.currentStation();
         if (!resets.existsByIdAndStationId(id, station.getId())) {
             throw new NotFoundException("Обнуление не найдено: " + id);

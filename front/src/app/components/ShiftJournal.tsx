@@ -8,8 +8,10 @@ import { getShifts, getOperators, deleteShift, setShiftCashCollected } from '../
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { formatCurrency, formatLiters } from '../lib/calculations';
 import { Operator, Shift, SHIFT_TYPE_LABELS } from '../types';
+import { getCurrentUser } from '../lib/auth';
 
 export function ShiftJournal() {
+  const isAdmin = getCurrentUser().role !== 'OPERATOR';
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -317,29 +319,30 @@ export function ShiftJournal() {
                   <td className={`px-4 py-2.5 text-right font-mono border-r border-[#edf0f5] ${voucherDebt(shift) > 0 ? 'bg-red-50 text-red-700 font-semibold' : 'text-slate-500'}`} style={{ fontSize: '13px' }}>
                     {formatLiters(voucherDebt(shift))}
                   </td>
-                  <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
-                    <button type="button" onClick={() => openCollection(shift)}
+                   <td className="px-4 py-2.5 text-center border-r border-[#edf0f5]">
+                    {isAdmin && <button type="button" onClick={() => openCollection(shift)}
                       aria-label={shift.cashCollected ? 'Отменить отметку инкассации' : 'Отметить инкассацию'}
                       className={`inline-flex size-5 items-center justify-center rounded border transition-colors ${shift.cashCollected ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700' : 'border-slate-300 text-transparent hover:border-blue-500 hover:bg-blue-50'}`}>
                       <Check className="size-3.5" strokeWidth={3} />
-                    </button>
+                    </button>}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Link to={`/shift/${shift.id}`}>
+                     <div className="flex items-center justify-end gap-1">
+                       {isAdmin && <Link to={`/shift/${shift.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50" style={{ fontSize: '12px' }}>
                           <Pencil className="size-3 mr-1" />
                           Открыть
                         </Button>
-                      </Link>
-                      <Button
+                       </Link>}
+                       {isAdmin && <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(shift.id)}
                         className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                       >
+                         <Trash2 className="size-3.5" />
+                       </Button>}
+                       {!isAdmin && <span className="text-slate-400" style={{ fontSize: '11px' }}>Только просмотр</span>}
                     </div>
                   </td>
                 </tr>

@@ -8,6 +8,9 @@ public record AuthResponse(
         Long stationId,
         String stationName,
         int pumpCount,
-        List<StationInfo> stations
+        List<StationInfo> stations,
+        String role,
+        Long operatorId,
+        String operatorName
 ) {
 }

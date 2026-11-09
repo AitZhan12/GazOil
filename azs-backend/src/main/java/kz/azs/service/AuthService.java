@@ -5,6 +5,7 @@ import kz.azs.domain.AppUser;
 import kz.azs.domain.Station;
 import kz.azs.repo.AppUserRepository;
 import kz.azs.web.UnauthorizedException;
+import kz.azs.web.ForbiddenException;
 import kz.azs.web.dto.AuthResponse;
 import kz.azs.web.dto.LoginRequest;
 import kz.azs.web.dto.StationInfo;
@@ -75,6 +76,22 @@ public class AuthService {
                 .orElseThrow(() -> new UnauthorizedException("Нет доступа к выбранной заправке"));
     }
 
+    public boolean isAdmin() {
+        return "ADMIN".equals(currentUser().getRole());
+    }
+
+    public void requireAdmin() {
+        if (!isAdmin()) throw new ForbiddenException("Недостаточно прав");
+    }
+
+    public AppUser currentOperatorUser() {
+        AppUser user = currentUser();
+        if (!"OPERATOR".equals(user.getRole()) || user.getOperator() == null) {
+            throw new ForbiddenException("Аккаунт не является операторским");
+        }
+        return user;
+    }
+
     @Transactional(readOnly = true)
     public List<StationInfo> availableStations() {
         return currentUser().getStations().stream()
@@ -92,7 +109,9 @@ public class AuthService {
                 .toList();
         return new AuthResponse(
                 user.getApiToken(), user.getUsername(), station.getId(), station.getName(),
-                station.getPumpCount(), stations);
+                station.getPumpCount(), stations, user.getRole(),
+                user.getOperator() != null ? user.getOperator().getId() : null,
+                user.getOperator() != null ? user.getOperator().getFullName() : null);
     }
 
     private static String hash(String salt, String password) {

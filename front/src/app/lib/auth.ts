@@ -14,6 +14,9 @@ type AuthResponse = {
   stationName: string;
   pumpCount: number;
   stations: { id: number; name: string; pumpCount: number }[];
+  role: 'ADMIN' | 'OPERATOR';
+  operatorId?: number;
+  operatorName?: string;
 };
 
 export function isAuthed(): boolean {
@@ -34,16 +37,19 @@ export function getAuthToken(): string | null {
   }
 }
 
-export function getCurrentUser(): { username: string | null; stationId: string | null; stationName: string | null; pumpCount: number } {
+export function getCurrentUser(): { username: string | null; stationId: string | null; stationName: string | null; pumpCount: number; role: 'ADMIN' | 'OPERATOR' | null; operatorId: string | null; operatorName: string | null } {
   try {
     return {
       username: localStorage.getItem(USER_KEY),
       stationId: localStorage.getItem(STATION_ID_KEY),
       stationName: localStorage.getItem(STATION_KEY),
       pumpCount: Number(localStorage.getItem('azs.station.pumpCount')) || 3,
+      role: (localStorage.getItem('azs.role') as 'ADMIN' | 'OPERATOR' | null) ?? null,
+      operatorId: localStorage.getItem('azs.operator.id'),
+      operatorName: localStorage.getItem('azs.operator.name'),
     };
   } catch {
-    return { username: null, stationId: null, stationName: null, pumpCount: 3 };
+    return { username: null, stationId: null, stationName: null, pumpCount: 3, role: null, operatorId: null, operatorName: null };
   }
 }
 
@@ -71,6 +77,9 @@ export async function login(username: string, password: string): Promise<void> {
     localStorage.setItem(STATION_KEY, body.stationName);
     localStorage.setItem('azs.station.pumpCount', String(body.pumpCount));
     localStorage.setItem(STATIONS_KEY, JSON.stringify(body.stations ?? []));
+    localStorage.setItem('azs.role', body.role);
+    if (body.operatorId != null) localStorage.setItem('azs.operator.id', String(body.operatorId));
+    if (body.operatorName) localStorage.setItem('azs.operator.name', body.operatorName);
   } catch {
     /* ignore */
   }
@@ -84,6 +93,9 @@ export function logout(): void {
     localStorage.removeItem(STATION_ID_KEY);
     localStorage.removeItem('azs.station.pumpCount');
     localStorage.removeItem(STATIONS_KEY);
+    localStorage.removeItem('azs.role');
+    localStorage.removeItem('azs.operator.id');
+    localStorage.removeItem('azs.operator.name');
   } catch { /* ignore */ }
 }
 

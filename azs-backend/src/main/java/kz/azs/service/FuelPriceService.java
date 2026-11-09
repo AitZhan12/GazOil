@@ -44,6 +44,7 @@ public class FuelPriceService {
     }
 
     public List<FuelPriceDto> update(List<FuelPriceDto> dtos) {
+        auth.requireAdmin();
         Map<Short, FuelPrice> current = currentByPump();
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         for (FuelPriceDto dto : dtos) {

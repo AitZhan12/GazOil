@@ -26,11 +26,15 @@ public class OperatorService {
 
     @Transactional(readOnly = true)
     public List<OperatorDto> list() {
-        return operators.findAllByStationIdOrderByIdAsc(auth.currentStation().getId()).stream()
+        List<Operator> result = auth.isAdmin()
+                ? operators.findAllByStationIdOrderByIdAsc(auth.currentStation().getId())
+                : List.of(auth.currentOperatorUser().getOperator());
+        return result.stream()
                 .map(mapper::toDto).toList();
     }
 
     public OperatorDto create(OperatorDto dto) {
+        auth.requireAdmin();
         Operator op = new Operator();
         op.setStation(auth.currentStation());
         op.setFullName(dto.name());
@@ -39,6 +43,7 @@ public class OperatorService {
     }
 
     public OperatorDto update(Long id, OperatorDto dto) {
+        auth.requireAdmin();
         Operator op = operators.findByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Оператор не найден: " + id));
         op.setFullName(dto.name());

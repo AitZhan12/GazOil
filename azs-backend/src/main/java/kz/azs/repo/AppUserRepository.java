@@ -8,9 +8,9 @@ import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
-    @EntityGraph(attributePaths = {"station", "stations"})
+    @EntityGraph(attributePaths = {"station", "stations", "operator"})
     Optional<AppUser> findByUsernameIgnoreCase(String username);
 
-    @EntityGraph(attributePaths = {"station", "stations"})
+    @EntityGraph(attributePaths = {"station", "stations", "operator"})
     Optional<AppUser> findByApiToken(String apiToken);
 }

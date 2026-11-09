@@ -22,6 +22,13 @@ public class AppUser {
     @JoinColumn(name = "station_id", nullable = false)
     private Station station;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operator_id")
+    private Operator operator;
+
+    @Column(nullable = false, length = 16)
+    private String role = "ADMIN";
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "app_user_station",

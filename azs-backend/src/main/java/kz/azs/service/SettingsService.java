@@ -40,6 +40,7 @@ public class SettingsService {
     }
 
     public SettingsDto update(SettingsDto dto) {
+        auth.requireAdmin();
         Station station = auth.currentStation();
         SalaryConfig config = configs.findByStationId(station.getId()).orElseGet(() -> {
             SalaryConfig c = new SalaryConfig();

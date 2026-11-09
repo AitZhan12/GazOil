@@ -20,10 +20,16 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
     List<Shift> findAllByStationIdOrderByStartedAtDesc(Long stationId);
 
     @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
+    List<Shift> findAllByStationIdAndOperatorIdOrderByStartedAtDesc(Long stationId, Long operatorId);
+
+    @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
     Optional<Shift> findWithDetailsById(Long id);
 
     @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
     Optional<Shift> findWithDetailsByIdAndStationId(Long id, Long stationId);
+
+    @EntityGraph(attributePaths = {"operator", "acceptedBy", "readings", "breakdown"})
+    Optional<Shift> findWithDetailsByIdAndStationIdAndOperatorId(Long id, Long stationId, Long operatorId);
 
     boolean existsByIdAndStationId(Long id, Long stationId);
 

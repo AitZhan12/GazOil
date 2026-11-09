@@ -37,6 +37,7 @@ public class WaterRecordService {
     }
 
     public WaterRecordDto create(WaterRecordDto dto) {
+        auth.requireAdmin();
         WaterRecord record = new WaterRecord();
         record.setStation(auth.currentStation());
         apply(record, dto);
@@ -44,12 +45,13 @@ public class WaterRecordService {
     }
 
     public WaterRecordDto update(Long id, WaterRecordDto dto) {
+        auth.requireAdmin();
         WaterRecord record = load(id);
         apply(record, dto);
         return toDto(records.save(record));
     }
 
-    public void delete(Long id) { records.delete(load(id)); }
+    public void delete(Long id) { auth.requireAdmin(); records.delete(load(id)); }
 
     private void apply(WaterRecord record, WaterRecordDto dto) {
         record.setOperator(operator(dto.operatorId()));

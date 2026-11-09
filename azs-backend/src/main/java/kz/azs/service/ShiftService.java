@@ -50,7 +50,11 @@ public class ShiftService {
     @Transactional(readOnly = true)
     public List<ShiftDto> list() {
         SalaryConfig config = settings.requireConfig();
-        return shifts.findAllByStationIdOrderByStartedAtDesc(auth.currentStation().getId()).stream()
+        List<Shift> stationShifts = auth.isAdmin()
+                ? shifts.findAllByStationIdOrderByStartedAtDesc(auth.currentStation().getId())
+                : shifts.findAllByStationIdAndOperatorIdOrderByStartedAtDesc(
+                        auth.currentStation().getId(), auth.currentOperatorUser().getOperator().getId());
+        return stationShifts.stream()
                 .map(s -> mapper.toDto(s, config)).toList();
     }
 
@@ -212,7 +216,11 @@ public class ShiftService {
     private record PriceSnapshot(BigDecimal discountPrice, BigDecimal basePrice) {}
 
     private Shift load(Long id) {
-        return shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())
+        var loaded = auth.isAdmin()
+                ? shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())
+                : shifts.findWithDetailsByIdAndStationIdAndOperatorId(
+                        id, auth.currentStation().getId(), auth.currentOperatorUser().getOperator().getId());
+        return loaded
                 .orElseThrow(() -> new NotFoundException("Смена не найдена: " + id));
     }
 

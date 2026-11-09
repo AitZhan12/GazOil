@@ -8,6 +8,7 @@ export function Root() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const currentUser = getCurrentUser();
+  const isOperator = currentUser.role === 'OPERATOR';
   const [stations, setStations] = useState(getAvailableStations);
 
   // Закрываем мобильное меню при смене маршрута.
@@ -29,6 +30,13 @@ export function Root() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  if (isOperator && location.pathname === '/') {
+    return <Navigate to="/shift/new" replace />;
+  }
+  if (isOperator && location.pathname !== '/journal' && location.pathname !== '/shift/new') {
+    return <Navigate to="/journal" replace />;
+  }
+
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
@@ -46,15 +54,20 @@ export function Root() {
     return location.pathname.startsWith(path);
   };
 
-  const navLinks = [
-    { path: '/', label: 'Дашборд', icon: LayoutDashboard },
-    { path: '/journal', label: 'Журнал смен', icon: FileText },
-    { path: '/report', label: 'Месячный отчёт', icon: BarChart3 },
-    { path: '/deliveries', label: 'Приход газа', icon: Droplet },
-    { path: '/water', label: 'Журнал воды', icon: Droplet },
-    { path: '/operators', label: 'Операторы', icon: Users },
-    { path: '/settings', label: 'Настройки', icon: SettingsIcon },
-  ];
+  const navLinks = isOperator
+    ? [
+        { path: '/shift/new', label: 'Новая смена', icon: FileText },
+        { path: '/journal', label: 'Мои смены', icon: FileText },
+      ]
+    : [
+        { path: '/', label: 'Дашборд', icon: LayoutDashboard },
+        { path: '/journal', label: 'Журнал смен', icon: FileText },
+        { path: '/report', label: 'Месячный отчёт', icon: BarChart3 },
+        { path: '/deliveries', label: 'Приход газа', icon: Droplet },
+        { path: '/water', label: 'Журнал воды', icon: Droplet },
+        { path: '/operators', label: 'Операторы', icon: Users },
+        { path: '/settings', label: 'Настройки', icon: SettingsIcon },
+      ];
 
   return (
     <div className="min-h-screen flex bg-[#f0f2f5]">
@@ -130,7 +143,7 @@ export function Root() {
 
         {/* Footer */}
         <div className="px-3 py-4 border-t border-[#1e293b] space-y-3">
-          {stations.length > 1 && (
+          {!isOperator && stations.length > 1 && (
             <select
               value={currentUser.stationId ?? ''}
               onChange={handleStationChange}

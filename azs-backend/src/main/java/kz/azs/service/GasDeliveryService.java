@@ -38,6 +38,7 @@ public class GasDeliveryService {
     }
 
     public GasDeliveryDto create(GasDeliveryDto dto) {
+        auth.requireAdmin();
         GasDelivery d = new GasDelivery();
         d.setStation(auth.currentStation());
         apply(d, dto);
@@ -45,6 +46,7 @@ public class GasDeliveryService {
     }
 
     public GasDeliveryDto update(Long id, GasDeliveryDto dto) {
+        auth.requireAdmin();
         GasDelivery d = deliveries.findByIdAndStationId(id, auth.currentStation().getId())
                 .orElseThrow(() -> new NotFoundException("Поставка не найдена: " + id));
         apply(d, dto);
@@ -52,6 +54,7 @@ public class GasDeliveryService {
     }
 
     public void delete(Long id) {
+        auth.requireAdmin();
         Station station = auth.currentStation();
         if (!deliveries.existsByIdAndStationId(id, station.getId())) {
             throw new NotFoundException("Поставка не найдена: " + id);
