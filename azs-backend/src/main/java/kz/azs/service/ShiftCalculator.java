@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * Расчёт блока «ИЗ НИХ» бумажного «Отчёта за смену» один в один с фронтовым
@@ -12,6 +13,13 @@ import java.math.RoundingMode;
  */
 @Component
 public class ShiftCalculator {
+
+    public record PumpSale(
+            BigDecimal volume,
+            BigDecimal discountLiters,
+            BigDecimal discountPrice,
+            BigDecimal regularPrice
+    ) {}
 
     /** Строки «как на листе» (всё — деньги/литры; зарплата считается отдельно). */
     public record ShiftResult(
@@ -26,24 +34,38 @@ public class ShiftCalculator {
     ) {}
 
     public ShiftResult compute(
-            BigDecimal totalLiters,
+            List<PumpSale> pumps,
             BigDecimal voucherLiters,
             BigDecimal cardLiters,
-            BigDecimal discountLiters,
-            BigDecimal discountPrice,
-            BigDecimal regularPrice,
             BigDecimal kaspiQR,
             BigDecimal kaspiTransfer,
             BigDecimal halykQR,
             BigDecimal halykTransfer
     ) {
-        BigDecimal remainder = totalLiters
-                .subtract(discountLiters)
-                .subtract(voucherLiters)
-                .subtract(cardLiters);
+        BigDecimal totalLiters = pumps.stream()
+                .map(p -> nz(p.volume())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        BigDecimal baseAmount = BigDecimal.ZERO;
+        BigDecimal regularLiters = BigDecimal.ZERO;
+        BigDecimal totalRegularBeforeSharedDeductions = pumps.stream()
+                .map(p -> nz(p.volume()).subtract(nz(p.discountLiters())).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal discountAmount = discountLiters.multiply(discountPrice);
-        BigDecimal baseAmount = remainder.multiply(regularPrice);
+        BigDecimal sharedDeductions = nz(voucherLiters).add(nz(cardLiters));
+        for (PumpSale pump : pumps) {
+            BigDecimal volume = nz(pump.volume());
+            BigDecimal discountLitersForPump = nz(pump.discountLiters());
+            BigDecimal regularBeforeShared = volume.subtract(discountLitersForPump).max(BigDecimal.ZERO);
+            BigDecimal sharedForPump = totalRegularBeforeSharedDeductions.signum() == 0
+                    ? BigDecimal.ZERO
+                    : sharedDeductions.multiply(regularBeforeShared)
+                        .divide(totalRegularBeforeSharedDeductions, 8, RoundingMode.HALF_UP);
+            BigDecimal regular = regularBeforeShared.subtract(sharedForPump);
+            discountAmount = discountAmount.add(discountLitersForPump.multiply(nz(pump.discountPrice())));
+            baseAmount = baseAmount.add(regular.multiply(nz(pump.regularPrice())));
+            regularLiters = regularLiters.add(regular);
+        }
+        BigDecimal remainder = regularLiters;
         BigDecimal totalRevenue = discountAmount.add(baseAmount);
 
         // «Наличные по 112» на листе бывают отрицательными (Kaspi QR > суммы по 112) —
@@ -61,5 +83,9 @@ public class ShiftCalculator {
 
     private static BigDecimal s2(BigDecimal v) {
         return (v != null ? v : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 }

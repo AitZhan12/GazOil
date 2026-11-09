@@ -50,21 +50,27 @@ public class AzsMapper {
                         // realization — generated-колонка в БД; до её перечитки считаем сами
                         r.getRealization() != null
                                 ? r.getRealization()
-                                : nz(r.getReadingEnd()).subtract(nz(r.getReadingStart()))
+                                : nz(r.getReadingEnd()).subtract(nz(r.getReadingStart())),
+                        nz(r.getDiscountLiters()),
+                        nz(r.getDiscountPrice()),
+                        nz(r.getBasePrice())
                 ))
                 .toList();
 
         BigDecimal totalLiters = pumps.stream()
                 .map(PumpReadingDto::volume)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<ShiftCalculator.PumpSale> sales = pumps.stream()
+                .map(p -> new ShiftCalculator.PumpSale(
+                        p.volume(), p.discountLiters(), p.discountPrice(), p.regularPrice()))
+                .toList();
+        BigDecimal discountLiters = pumps.stream()
+                .map(p -> nz(p.discountLiters())).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         ShiftCalculator.ShiftResult t = calculator.compute(
-                totalLiters,
+                sales,
                 nz(b.getTalonyLiters()),
                 nz(b.getCardLiters()),
-                nz(b.getDiscountLiters()),
-                nz(b.getDiscountPrice()),
-                 nz(b.getBasePrice()),
                  nz(b.getKaspiQr()),
                  nz(b.getKaspiTransfer()),
                  nz(b.getHalykQr()),
@@ -92,13 +98,13 @@ public class AzsMapper {
                 pumps,
                 nz(b.getTalonyLiters()),
                 nz(b.getCardLiters()),
-                nz(b.getDiscountLiters()),
+                discountLiters,
                  nz(b.getKaspiQr()),
                  nz(b.getKaspiTransfer()),
                  nz(b.getHalykQr()),
                  nz(b.getHalykTransfer()),
-                 nz(b.getDiscountPrice()),
-                nz(b.getBasePrice()),
+                 pumps.isEmpty() ? BigDecimal.ZERO : pumps.get(0).discountPrice(),
+                 pumps.isEmpty() ? BigDecimal.ZERO : pumps.get(0).regularPrice(),
                 t.totalLiters(),
                 t.discountAmount(),
                 t.remainderLiters(),

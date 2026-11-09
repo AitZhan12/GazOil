@@ -22,6 +22,8 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -62,23 +64,22 @@ public class ShiftService {
         shift.setStation(auth.currentStation());
         apply(shift, dto);
         validateOpeningReadingsUnlessOverlapping(shift, null);
-        // Цены 107/112 владелец в форме не вводит — снапшотим из настроек на момент
-        // создания, чтобы будущая правка цены не «двигала» эту смену.
-        FuelPrice price = fuelPrices.requireCurrent();
-        ShiftBreakdown b = shift.getBreakdown();
-        b.setDiscountPrice(price.getDiscountPrice());
-        b.setBasePrice(price.getBasePrice());
+        setReadingPrices(shift, fuelPrices.currentByPump(), Map.of());
         return mapper.toDto(shifts.save(shift), settings.requireConfig());
     }
 
     public ShiftDto update(Long id, ShiftDto dto) {
         Shift shift = load(id);
+        Map<Short, PriceSnapshot> oldPrices = new HashMap<>();
+        shift.getReadings().forEach(r -> oldPrices.put(r.getPumpNumber(),
+                new PriceSnapshot(r.getDiscountPrice(), r.getBasePrice())));
         // Удаляем старые показания и сбрасываем в БД ДО вставки новых,
         // иначе INSERT с тем же (shift_id, pump_number) упрётся в unique-constraint.
         shift.getReadings().clear();
         shifts.flush();
         apply(shift, dto);
         validateOpeningReadingsUnlessOverlapping(shift, id);
+        setReadingPrices(shift, fuelPrices.currentByPump(), oldPrices);
         return mapper.toDto(shifts.save(shift), settings.requireConfig());
     }
 
@@ -140,6 +141,7 @@ public class ShiftService {
         shift.setEndedAt(shiftEnd);
         shift.setShiftType(normalizeShiftType(dto.shiftType()));
 
+        BigDecimal discountLiters = BigDecimal.ZERO;
         if (dto.pumps() != null) {
             for (PumpReadingDto p : dto.pumps()) {
                 if (p.pumpNumber() < 1 || p.pumpNumber() > shift.getStation().getPumpCount()) {
@@ -148,14 +150,20 @@ public class ShiftService {
                 // пустые строки колонок (нет начала и конца) не сохраняем
                 BigDecimal start = nz(p.start());
                 BigDecimal end = nz(p.end());
+                BigDecimal pumpDiscount = nz(p.discountLiters());
                 if (start.signum() == 0 && end.signum() == 0) {
                     continue;
+                }
+                if (pumpDiscount.signum() < 0 || pumpDiscount.compareTo(end.subtract(start)) > 0) {
+                    throw new IllegalArgumentException("Скидочные литры не могут превышать реализацию колонки " + p.pumpNumber());
                 }
                 FuelReading r = new FuelReading();
                 r.setPumpNumber((short) p.pumpNumber());
                 r.setReadingStart(start);
                 r.setReadingEnd(end);
+                r.setDiscountLiters(pumpDiscount);
                 shift.addReading(r);
+                discountLiters = discountLiters.add(pumpDiscount);
             }
         }
 
@@ -168,12 +176,40 @@ public class ShiftService {
         // на создании снапшотятся из настроек (см. create), при правке — остаются.
         b.setTalonyLiters(nz(dto.voucherLiters()));
         b.setCardLiters(nz(dto.cardLiters()));
-        b.setDiscountLiters(nz(dto.discountLiters()));
+        b.setDiscountLiters(discountLiters);
         b.setKaspiQr(nz(dto.kaspiQR()));
         b.setKaspiTransfer(nz(dto.kaspiTransfer()));
         b.setHalykQr(nz(dto.halykQR()));
         b.setHalykTransfer(nz(dto.halykTransfer()));
     }
+
+    private void setReadingPrices(Shift shift, Map<Short, FuelPrice> currentPrices,
+                                  Map<Short, PriceSnapshot> oldPrices) {
+        for (FuelReading reading : shift.getReadings()) {
+            PriceSnapshot old = oldPrices.get(reading.getPumpNumber());
+            FuelPrice current = currentPrices.get(reading.getPumpNumber());
+            if (old != null) {
+                reading.setDiscountPrice(nz(old.discountPrice()));
+                reading.setBasePrice(nz(old.basePrice()));
+            } else if (current != null) {
+                reading.setDiscountPrice(current.getDiscountPrice());
+                reading.setBasePrice(current.getBasePrice());
+            } else {
+                throw new NotFoundException("Цены колонки не настроены: " + reading.getPumpNumber());
+            }
+        }
+        if (!shift.getReadings().isEmpty()) {
+            ShiftBreakdown b = shift.getBreakdown();
+            b.setDiscountPrice(shift.getReadings().get(0).getDiscountPrice());
+            b.setBasePrice(shift.getReadings().get(0).getBasePrice());
+        } else if (currentPrices.containsKey((short) 1)) {
+            ShiftBreakdown b = shift.getBreakdown();
+            b.setDiscountPrice(currentPrices.get((short) 1).getDiscountPrice());
+            b.setBasePrice(currentPrices.get((short) 1).getBasePrice());
+        }
+    }
+
+    private record PriceSnapshot(BigDecimal discountPrice, BigDecimal basePrice) {}
 
     private Shift load(Long id) {
         return shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())

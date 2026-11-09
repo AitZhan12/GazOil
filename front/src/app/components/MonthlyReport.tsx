@@ -240,8 +240,8 @@ export function MonthlyReport() {
       return { pumpNumber, start, end, autoStart, autoEnd, sales: round2(end - start) };
     });
 
-    const regularPriceSet = new Set(monthShifts.map(shift => shift.regularPrice));
-    const discountPriceSet = new Set(monthShifts.map(shift => shift.discountPrice));
+    const regularPriceSet = new Set(monthShifts.flatMap(shift => shift.pumps.map(pump => pump.regularPrice).filter(price => price > 0)));
+    const discountPriceSet = new Set(monthShifts.flatMap(shift => shift.pumps.map(pump => pump.discountPrice).filter(price => price > 0)));
     const autoTotalLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.totalLiters, 0));
     const totalByReadings = round2(pumpRows.reduce((sum, row) => sum + row.sales, 0));
     const autoVoucherLiters = round2(monthShifts.reduce((sum, shift) => sum + shift.voucherLiters, 0));
@@ -297,8 +297,8 @@ export function MonthlyReport() {
       halykTransfer,
       serviceMemo,
       cashToDeposit,
-      regularPriceLabel: regularPriceSet.size === 1 ? `${formatNumber([...regularPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
-      discountPriceLabel: discountPriceSet.size === 1 ? `${formatNumber([...discountPriceSet][0] ?? 0, 0)} ₸` : 'по цене смены',
+      regularPriceLabel: regularPriceSet.size === 1 ? `${formatNumber([...regularPriceSet][0] ?? 0, 0)} ₸` : 'ценам колонок',
+      discountPriceLabel: discountPriceSet.size === 1 ? `${formatNumber([...discountPriceSet][0] ?? 0, 0)} ₸` : 'ценам колонок',
     };
   }, [monthShifts, selectedMonth, serviceMemoByMonth, kaspiQrByMonth, halykQrByMonth, pumpOverridesByMonth, breakdownOverridesByMonth, isReportEditing, draftServiceMemo, draftKaspiQr, draftHalykQr, draftPumpOverrides, draftBreakdownOverrides]);
 

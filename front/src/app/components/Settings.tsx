@@ -5,10 +5,12 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { getSettings, updateSettings, getFuelPrice, updateFuelPrice } from '../lib/storage';
 import { AppSettings, BonusTier, FuelPrice } from '../types';
+import { getCurrentUser } from '../lib/auth';
 
 export function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
+  const [fuelPrice, setFuelPrice] = useState<FuelPrice[] | null>(null);
+  const pumpCount = getCurrentUser().pumpCount;
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -26,9 +28,9 @@ export function Settings() {
     setSettings(prev => (prev ? { ...prev, ...p } : prev));
   };
 
-  const patchPrice = (p: Partial<FuelPrice>) => {
+  const patchPrice = (pumpNumber: number, p: Partial<FuelPrice>) => {
     setSaved(false);
-    setFuelPrice(prev => (prev ? { ...prev, ...p } : prev));
+    setFuelPrice(prev => prev ? prev.map(price => price.pumpNumber === pumpNumber ? { ...price, ...p } : price) : prev);
   };
 
   const num = (v: string) => (v === '' ? 0 : parseFloat(v) || 0);
@@ -54,7 +56,7 @@ export function Settings() {
     setSaving(true);
     setError('');
     try {
-      // Сортируем ступени по планке и сохраняем ставки/бонусы и цены 107/112.
+      // Сортируем ступени по планке и сохраняем ставки/бонусы и цены колонок.
       const ordered = [...settings.bonusTiers].sort((a, b) => a.thresholdLiters - b.thresholdLiters);
       const [result, price] = await Promise.all([
         updateSettings({ ...settings, bonusTiers: ordered }),
@@ -119,15 +121,20 @@ export function Settings() {
             </div>
           </div>
 
-          {/* Цены 107/112 */}
+           {/* Цены по колонкам */}
           <div className={cardClass}>
             <div className={headerClass}>
               <span className="text-slate-700" style={{ fontSize: '13px', fontWeight: 600 }}>Цены (₸/л)</span>
             </div>
-            <div className={`${bodyClass} space-y-2.5`}>
-              {rateField('discountPrice', 'Дисконтная (107)', fuelPrice.discountPrice, v => patchPrice({ discountPrice: num(v) }))}
-              {rateField('basePrice', 'Основная (112)', fuelPrice.basePrice, v => patchPrice({ basePrice: num(v) }))}
-              <p className="text-slate-400" style={{ fontSize: '11px' }}>Снапшотятся в смену при её создании. Изменение влияет только на новые смены — прошлые сохраняют свою цену.</p>
+             <div className={`${bodyClass} space-y-2.5`}>
+               {fuelPrice.slice(0, pumpCount).map(price => (
+                 <div key={price.pumpNumber} className="rounded-md border border-[#edf0f5] p-3 space-y-2">
+                   <div className="text-slate-700" style={{ fontSize: '12px', fontWeight: 600 }}>Колонка {price.pumpNumber}</div>
+                   {rateField(`discountPrice-${price.pumpNumber}`, 'Дисконтная', price.discountPrice, v => patchPrice(price.pumpNumber, { discountPrice: num(v) }))}
+                   {rateField(`basePrice-${price.pumpNumber}`, 'Основная', price.basePrice, v => patchPrice(price.pumpNumber, { basePrice: num(v) }))}
+                 </div>
+               ))}
+               <p className="text-slate-400" style={{ fontSize: '11px' }}>Цены снапшотятся отдельно по каждой колонке при создании смены. Изменение влияет только на новые смены.</p>
             </div>
           </div>
 

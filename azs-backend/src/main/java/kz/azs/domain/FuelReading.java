@@ -30,6 +30,15 @@ public class FuelReading {
     @Column(name = "reading_end", nullable = false, precision = 12, scale = 2)
     private BigDecimal readingEnd;
 
+    @Column(name = "discount_liters", nullable = false, precision = 10, scale = 2)
+    private BigDecimal discountLiters = BigDecimal.ZERO;
+
+    @Column(name = "discount_price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal discountPrice = BigDecimal.ZERO;
+
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal basePrice = BigDecimal.ZERO;
+
     // Считается в БД (generated stored). Сюда только читаем — Hibernate
     // перечитывает значение после insert/update, никогда его не пишет.
     @Generated(event = {EventType.INSERT, EventType.UPDATE})

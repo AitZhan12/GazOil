@@ -15,6 +15,9 @@ export interface PumpReading {
   start: number;
   end: number;
   volume: number; // calculated
+  discountLiters: number;
+  discountPrice: number;
+  regularPrice: number;
 }
 
 // Тип смены: сутки | день | ночь — определяет зарплатную ставку.
@@ -82,6 +85,7 @@ export interface WaterRecord {
 
 // Общие цены 107/112 (раздел «Настройки»).
 export interface FuelPrice {
+  pumpNumber: number;
   discountPrice: number;
   basePrice: number;
 }

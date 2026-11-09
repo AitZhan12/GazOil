@@ -152,6 +152,15 @@ export function ShiftForm() {
   const [pump2End, setPump2End] = useState('');
   const [pump3Start, setPump3Start] = useState('');
   const [pump3End, setPump3End] = useState('');
+  const [pump1Discount, setPump1Discount] = useState('');
+  const [pump2Discount, setPump2Discount] = useState('');
+  const [pump3Discount, setPump3Discount] = useState('');
+  const [pump1DiscountPrice, setPump1DiscountPrice] = useState('');
+  const [pump2DiscountPrice, setPump2DiscountPrice] = useState('');
+  const [pump3DiscountPrice, setPump3DiscountPrice] = useState('');
+  const [pump1RegularPrice, setPump1RegularPrice] = useState('');
+  const [pump2RegularPrice, setPump2RegularPrice] = useState('');
+  const [pump3RegularPrice, setPump3RegularPrice] = useState('');
 
   const [voucherLiters, setVoucherLiters] = useState('');
   const [cardLiters, setCardLiters] = useState('');
@@ -189,6 +198,9 @@ export function ShiftForm() {
     if (pump(2).end != null) setPump2End(String(pump(2).end));
     if (pump(3).start != null) setPump3Start(String(pump(3).start));
     if (pump(3).end != null) setPump3End(String(pump(3).end));
+    if (pump(1).discountLiters != null) setPump1Discount(String(pump(1).discountLiters));
+    if (pump(2).discountLiters != null) setPump2Discount(String(pump(2).discountLiters));
+    if (pump(3).discountLiters != null) setPump3Discount(String(pump(3).discountLiters));
     const number = (key: string) => data[key] == null ? undefined : String(data[key]);
     if (number('voucherLiters') !== undefined) setVoucherLiters(number('voucherLiters')!);
     if (number('cardLiters') !== undefined) setCardLiters(number('cardLiters')!);
@@ -227,6 +239,15 @@ export function ShiftForm() {
       setPump2End(shift.pumps[1]?.end.toString() ?? '');
       setPump3Start(shift.pumps[2]?.start.toString() ?? '');
       setPump3End(shift.pumps[2]?.end.toString() ?? '');
+      setPump1Discount(String(shift.pumps[0]?.discountLiters ?? 0));
+      setPump2Discount(String(shift.pumps[1]?.discountLiters ?? 0));
+      setPump3Discount(String(shift.pumps[2]?.discountLiters ?? 0));
+      setPump1DiscountPrice(String(shift.pumps[0]?.discountPrice ?? shift.discountPrice ?? 0));
+      setPump2DiscountPrice(String(shift.pumps[1]?.discountPrice ?? shift.discountPrice ?? 0));
+      setPump3DiscountPrice(String(shift.pumps[2]?.discountPrice ?? shift.discountPrice ?? 0));
+      setPump1RegularPrice(String(shift.pumps[0]?.regularPrice ?? shift.regularPrice ?? 0));
+      setPump2RegularPrice(String(shift.pumps[1]?.regularPrice ?? shift.regularPrice ?? 0));
+      setPump3RegularPrice(String(shift.pumps[2]?.regularPrice ?? shift.regularPrice ?? 0));
       setVoucherLiters(shift.voucherLiters.toString());
       setCardLiters(shift.cardLiters.toString());
       setDiscountLiters(shift.discountLiters.toString());
@@ -266,10 +287,16 @@ export function ShiftForm() {
           setEndDate(endIso);
           setEndDateText(isoToRu(endIso));
           // Цены 107/112 для новой смены — из общих настроек (снапшот сделает бэк).
-          const price = await getFuelPrice();
+          const prices = await getFuelPrice();
           if (cancelled) return;
-          setDiscountPrice(String(price.discountPrice));
-          setRegularPrice(String(price.basePrice));
+           const priceFor = (pumpNumber: number) => prices.find(price => price.pumpNumber === pumpNumber) ?? prices[0];
+           const p1 = priceFor(1); const p2 = priceFor(2); const p3 = priceFor(3);
+           setPump1DiscountPrice(String(p1?.discountPrice ?? 0));
+           setPump2DiscountPrice(String(p2?.discountPrice ?? 0));
+           setPump3DiscountPrice(String(p3?.discountPrice ?? 0));
+           setPump1RegularPrice(String(p1?.basePrice ?? 0));
+           setPump2RegularPrice(String(p2?.basePrice ?? 0));
+           setPump3RegularPrice(String(p3?.basePrice ?? 0));
           const lastReadings = await getLastPumpReadings();
           if (cancelled) return;
           if (lastReadings && lastReadings.length >= pumpCount) {
@@ -296,21 +323,15 @@ export function ShiftForm() {
   const pump3Volume = (parseFloat(pump3End) || 0) - (parseFloat(pump3Start) || 0);
 
   const pumps = [
-    { start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0 },
-    { start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0 },
-    { start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0 },
+    { start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0, discountLiters: parseFloat(pump1Discount) || 0, discountPrice: parseFloat(pump1DiscountPrice) || 0, regularPrice: parseFloat(pump1RegularPrice) || 0 },
+    { start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0, discountLiters: parseFloat(pump2Discount) || 0, discountPrice: parseFloat(pump2DiscountPrice) || 0, regularPrice: parseFloat(pump2RegularPrice) || 0 },
+    { start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0, discountLiters: parseFloat(pump3Discount) || 0, discountPrice: parseFloat(pump3DiscountPrice) || 0, regularPrice: parseFloat(pump3RegularPrice) || 0 },
   ].slice(0, pumpCount);
-
-  const dPrice = parseFloat(discountPrice) || 0;
-  const bPrice = parseFloat(regularPrice) || 0;
 
   const calculated = calculateShiftFields(
     pumps,
     parseFloat(voucherLiters) || 0,
     parseFloat(cardLiters) || 0,
-    parseFloat(discountLiters) || 0,
-    dPrice,
-    bPrice,
     parseFloat(kaspiQR) || 0,
     parseFloat(kaspiTransfer) || 0,
     parseFloat(halykQR) || 0,
@@ -373,7 +394,10 @@ export function ShiftForm() {
     else if (!isValidTime(endTime)) newErrors.endTime = 'Время в формате ЧЧ:ММ';
     if (pump1Volume < 0) newErrors.pump1 = 'Конец смены должен быть больше начала';
     if (pump2Volume < 0) newErrors.pump2 = 'Конец смены должен быть больше начала';
-     if (pumpCount >= 3 && pump3Volume < 0) newErrors.pump3 = 'Конец смены должен быть больше начала';
+    if (pumpCount >= 3 && pump3Volume < 0) newErrors.pump3 = 'Конец смены должен быть больше начала';
+    if ((parseFloat(pump1Discount) || 0) > Math.max(0, pump1Volume)) newErrors.pump1 = 'Скидочные литры больше реализации';
+    if ((parseFloat(pump2Discount) || 0) > Math.max(0, pump2Volume)) newErrors.pump2 = 'Скидочные литры больше реализации';
+    if (pumpCount >= 3 && (parseFloat(pump3Discount) || 0) > Math.max(0, pump3Volume)) newErrors.pump3 = 'Скидочные литры больше реализации';
     const startDateTime = new Date(`${startDate}T${startTime}`);
     const endDateTime = new Date(`${endDate}T${endTime}`);
     if (endDateTime <= startDateTime) newErrors.endTime = 'Время окончания должно быть позже времени начала';
@@ -386,9 +410,9 @@ export function ShiftForm() {
     e.preventDefault();
     if (!validate() || saving) return;
     const pumpReadings: PumpReading[] = [
-      { pumpNumber: 1, start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0, volume: pump1Volume },
-      { pumpNumber: 2, start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0, volume: pump2Volume },
-      { pumpNumber: 3, start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0, volume: pump3Volume },
+      { pumpNumber: 1, start: parseFloat(pump1Start) || 0, end: parseFloat(pump1End) || 0, volume: pump1Volume, discountLiters: parseFloat(pump1Discount) || 0, discountPrice: parseFloat(pump1DiscountPrice) || 0, regularPrice: parseFloat(pump1RegularPrice) || 0 },
+      { pumpNumber: 2, start: parseFloat(pump2Start) || 0, end: parseFloat(pump2End) || 0, volume: pump2Volume, discountLiters: parseFloat(pump2Discount) || 0, discountPrice: parseFloat(pump2DiscountPrice) || 0, regularPrice: parseFloat(pump2RegularPrice) || 0 },
+      { pumpNumber: 3, start: parseFloat(pump3Start) || 0, end: parseFloat(pump3End) || 0, volume: pump3Volume, discountLiters: parseFloat(pump3Discount) || 0, discountPrice: parseFloat(pump3DiscountPrice) || 0, regularPrice: parseFloat(pump3RegularPrice) || 0 },
     ].slice(0, pumpCount);
     const shift: Shift = {
       id: isEditing ? (id as string) : '',
@@ -399,13 +423,13 @@ export function ShiftForm() {
       pumps: pumpReadings,
       voucherLiters: parseFloat(voucherLiters) || 0,
       cardLiters: parseFloat(cardLiters) || 0,
-      discountLiters: parseFloat(discountLiters) || 0,
+      discountLiters: pumpReadings.reduce((sum, pump) => sum + pump.discountLiters, 0),
       kaspiQR: parseFloat(kaspiQR) || 0,
       kaspiTransfer: parseFloat(kaspiTransfer) || 0,
       halykQR: parseFloat(halykQR) || 0,
       halykTransfer: parseFloat(halykTransfer) || 0,
-      discountPrice: dPrice,
-      regularPrice: bPrice,
+      discountPrice: pumpReadings[0]?.discountPrice ?? 0,
+      regularPrice: pumpReadings[0]?.regularPrice ?? 0,
       ...calculated,
       baseSalary: baseSalaryPreview,
       bonus: bonusPreview,
@@ -619,14 +643,16 @@ export function ShiftForm() {
                   <th className="px-4 py-2.5 text-left text-slate-500 w-20 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Колонка</th>
                   <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Начало смены</th>
                   <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Конец смены</th>
+                  <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Скидка (л)</th>
+                  <th className="px-4 py-2.5 text-left text-slate-500 border-r border-[#edf0f5]" style={{ fontSize: '11px', fontWeight: 600 }}>Цены (₸)</th>
                   <th className="px-4 py-2.5 text-left text-slate-500" style={{ fontSize: '11px', fontWeight: 600 }}>Реализация (л)</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { num: 1, start: pump1Start, setStart: setPump1Start, end: pump1End, setEnd: setPump1End, volume: pump1Volume, err: errors.pump1 },
-                  { num: 2, start: pump2Start, setStart: setPump2Start, end: pump2End, setEnd: setPump2End, volume: pump2Volume, err: errors.pump2 },
-                  { num: 3, start: pump3Start, setStart: setPump3Start, end: pump3End, setEnd: setPump3End, volume: pump3Volume, err: errors.pump3 },
+                  { num: 1, start: pump1Start, setStart: setPump1Start, end: pump1End, setEnd: setPump1End, discount: pump1Discount, setDiscount: setPump1Discount, discountPrice: pump1DiscountPrice, regularPrice: pump1RegularPrice, volume: pump1Volume, err: errors.pump1 },
+                  { num: 2, start: pump2Start, setStart: setPump2Start, end: pump2End, setEnd: setPump2End, discount: pump2Discount, setDiscount: setPump2Discount, discountPrice: pump2DiscountPrice, regularPrice: pump2RegularPrice, volume: pump2Volume, err: errors.pump2 },
+                  { num: 3, start: pump3Start, setStart: setPump3Start, end: pump3End, setEnd: setPump3End, discount: pump3Discount, setDiscount: setPump3Discount, discountPrice: pump3DiscountPrice, regularPrice: pump3RegularPrice, volume: pump3Volume, err: errors.pump3 },
                 ].slice(0, pumpCount).map(pump => (
                   <tr key={pump.num} className="border-b border-[#edf0f5]">
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
@@ -640,6 +666,13 @@ export function ShiftForm() {
                       <Input type="number" step="0.01" value={pump.end} onChange={e => pump.setEnd(e.target.value)}
                         className={`h-8 min-w-[150px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
                     </td>
+                    <td className="px-4 py-2 border-r border-[#edf0f5]">
+                      <Input type="number" step="0.01" value={pump.discount ?? ''} onChange={e => pump.setDiscount?.(e.target.value)}
+                        className={`h-8 min-w-[110px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
+                    </td>
+                    <td className="px-4 py-2 border-r border-[#edf0f5] text-slate-500 font-mono whitespace-nowrap" style={{ fontSize: '11px' }}>
+                      {formatNumber(parseFloat(pump.discountPrice ?? '0') || 0, 0)} / {formatNumber(parseFloat(pump.regularPrice ?? '0') || 0, 0)}
+                    </td>
                     <td className="px-4 py-2 bg-[#f8fafc]">
                       <span className="font-mono text-slate-900" style={{ fontSize: '13px', fontWeight: 500 }}>{formatLiters(pump.volume)}</span>
                     </td>
@@ -648,7 +681,7 @@ export function ShiftForm() {
               </tbody>
               <tfoot>
                 <tr className="bg-blue-50 border-t-2 border-blue-200">
-                  <td colSpan={3} className="px-4 py-2.5 text-right text-blue-700 border-r border-blue-200" style={{ fontSize: '12px', fontWeight: 600 }}>
+                   <td colSpan={5} className="px-4 py-2.5 text-right text-blue-700 border-r border-blue-200" style={{ fontSize: '12px', fontWeight: 600 }}>
                     Итого реализация:
                   </td>
                   <td className="px-4 py-2.5 font-mono text-blue-900" style={{ fontSize: '14px', fontWeight: 700 }}>
@@ -719,34 +752,26 @@ export function ShiftForm() {
               {/* Товарная карта (литр) — ввод */}
               {cashRowInput('cardLiters', 'Товарная карта (литр)', cardLiters, setCardLiters, 'л')}
 
-              {/* Дисконтная карта по 107 тг — ввод литров + формула */}
+              {/* Скидочные литры вводятся в строках конкретных колонок */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">
-                <Label htmlFor="discountLiters" className="text-slate-600 shrink-0" style={{ fontSize: '12px', fontWeight: 400 }}>
-                  Дисконтная карта по {formatNumber(dPrice, 0)} тг
+                <Label className="text-slate-600 shrink-0" style={{ fontSize: '12px', fontWeight: 400 }}>
+                  Дисконтные литры по ценам колонок
                 </Label>
-                <div className="flex flex-col items-end gap-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <Input id="discountLiters" type="number" step="0.01" value={discountLiters}
-                      onChange={e => setDiscountLiters(e.target.value)} placeholder="0.00"
-                      className="h-8 w-28 font-mono border-[#d1d9e6] bg-[#f8fafc] text-right" style={{ fontSize: '13px' }} />
-                    <span className="text-slate-400" style={{ fontSize: '12px' }}>л</span>
-                  </div>
-                  <span className="font-mono text-slate-400" style={{ fontSize: '11px' }}>
-                    {formatNumber(parseFloat(discountLiters) || 0, 2)} л × {formatNumber(dPrice, 0)} ₸ = {formatCurrency(calculated.discountAmount)}
-                  </span>
-                </div>
+                <span className="font-mono text-slate-400" style={{ fontSize: '11px' }}>
+                  {formatCurrency(calculated.discountAmount)}
+                </span>
               </div>
 
-              {/* Остаток (литр) по 112 тг — расчёт */}
-              {cashRowValue('Остаток (литр) по ' + formatNumber(bPrice, 0) + ' тг', formatLiters(calculated.remainderLiters))}
+              {/* Остаток (литр) по ценам колонок — расчёт */}
+              {cashRowValue('Остаток (литр) по ценам колонок', formatLiters(calculated.remainderLiters))}
 
               {/* Общая сумма (тг) по 112 тг — расчёт + формула */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">
-                <span className="text-slate-600" style={{ fontSize: '12px' }}>Общая сумма (тг) по {formatNumber(bPrice, 0)} тг</span>
+                <span className="text-slate-600" style={{ fontSize: '12px' }}>Общая сумма по ценам колонок</span>
                 <div className="flex flex-col items-end gap-0.5">
                   <span className="font-mono text-slate-800" style={{ fontSize: '13px', fontWeight: 500 }}>{formatCurrency(calculated.baseAmount)}</span>
                   <span className="font-mono text-slate-400" style={{ fontSize: '11px' }}>
-                    {formatNumber(calculated.remainderLiters, 2)} л × {formatNumber(bPrice, 0)} ₸
+                     {formatNumber(calculated.remainderLiters, 2)} л по ценам колонок
                   </span>
                 </div>
               </div>
@@ -759,13 +784,13 @@ export function ShiftForm() {
 
               {/* Наличные по 112 — расчёт (может быть отрицательным) */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">
-                <span className="text-slate-600" style={{ fontSize: '12px' }}>Наличные по {formatNumber(bPrice, 0)} тг</span>
+                <span className="text-slate-600" style={{ fontSize: '12px' }}>Наличные по ценам колонок</span>
                 <span className={`font-mono ${calculated.cashByBase < 0 ? 'text-red-600' : 'text-slate-800'}`} style={{ fontSize: '13px', fontWeight: 500 }}>
                   {formatCurrency(calculated.cashByBase)}
                 </span>
               </div>
               {/* Наличные по дисконтной карте по 107 — расчёт */}
-              {cashRowValue('Наличные по дисконтной карте по ' + formatNumber(dPrice, 0) + ' тг', formatCurrency(calculated.cashByDiscount))}
+              {cashRowValue('Наличные по дисконтным ценам колонок', formatCurrency(calculated.cashByDiscount))}
 
               {/* ИТОГО НАЛИЧНЫМИ — расчёт, выделено */}
               <div className="flex justify-between items-center py-2.5 mt-1 border-t-2 border-[#d1d9e6]">

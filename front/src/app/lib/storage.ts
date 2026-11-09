@@ -186,12 +186,12 @@ export function deleteTankReset(id: string): Promise<void> {
 
 // ---- Цены 107/112 (снапшотятся в смену при создании) ----
 
-export function getFuelPrice(): Promise<FuelPrice> {
-  return http<FuelPrice>('/config/fuel-price');
+export function getFuelPrice(): Promise<FuelPrice[]> {
+  return http<FuelPrice[]>('/config/fuel-price');
 }
 
-export function updateFuelPrice(price: FuelPrice): Promise<FuelPrice> {
-  return http<FuelPrice>('/config/fuel-price', {
+export function updateFuelPrice(price: FuelPrice[]): Promise<FuelPrice[]> {
+  return http<FuelPrice[]>('/config/fuel-price', {
     method: 'PUT',
     body: JSON.stringify(price),
   });

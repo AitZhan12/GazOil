@@ -8,12 +8,9 @@ export function round2(num: number): number {
 // Блок «ИЗ НИХ» бумажного листа: владелец вводит литры и безнал, цены 107/112 —
 // снапшот смены. Один в один с бэковым ShiftCalculator.
 export function calculateShiftFields(
-  pumps: Array<{ start: number; end: number }>,
+  pumps: Array<{ start: number; end: number; discountLiters: number; discountPrice: number; regularPrice: number }>,
   voucherLiters: number,
   cardLiters: number,
-  discountLiters: number,
-  discountPrice: number,
-  regularPrice: number,
   kaspiQR: number,
   kaspiTransfer: number,
   halykQR: number,
@@ -22,14 +19,17 @@ export function calculateShiftFields(
   // Итого литров со всех колонок
   const totalLiters = pumps.reduce((sum, pump) => sum + (pump.end - pump.start), 0);
 
-  // Остаток (литр) = итого − дисконт − талоны − карта
-  const remainderLiters = totalLiters - discountLiters - voucherLiters - cardLiters;
-
-  // Дисконтная сумма (наличные по 107) = дисконт (л) × 107
-  const discountAmount = discountLiters * discountPrice;
-
-  // Общая сумма по 112 = остаток × 112
-  const baseAmount = remainderLiters * regularPrice;
+  const regularBeforeShared = pumps.map(p => Math.max(0, (p.end - p.start) - p.discountLiters));
+  const totalRegularBeforeShared = regularBeforeShared.reduce((sum, value) => sum + value, 0);
+  const sharedDeductions = voucherLiters + cardLiters;
+  const discountAmount = pumps.reduce((sum, pump) => sum + pump.discountLiters * pump.discountPrice, 0);
+  const baseAmount = pumps.reduce((sum, pump, index) => {
+    const shared = totalRegularBeforeShared === 0
+      ? 0
+      : sharedDeductions * regularBeforeShared[index] / totalRegularBeforeShared;
+    return sum + (regularBeforeShared[index] - shared) * pump.regularPrice;
+  }, 0);
+  const remainderLiters = regularBeforeShared.reduce((sum, value) => sum + value, 0) - sharedDeductions;
 
   // Выручка всего (для журнала/отчёта)
   const totalRevenue = discountAmount + baseAmount;

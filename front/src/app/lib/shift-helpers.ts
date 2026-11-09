@@ -5,6 +5,7 @@ import { getCurrentUser } from './auth';
 function emptyReadings(): PumpReading[] {
   return Array.from({ length: getCurrentUser().pumpCount }, (_, index) => ({
     pumpNumber: index + 1, start: 0, end: 0, volume: 0,
+    discountLiters: 0, discountPrice: 0, regularPrice: 0,
   }));
 }
 

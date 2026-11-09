@@ -2,8 +2,9 @@ package kz.azs.web.dto;
 
 import java.math.BigDecimal;
 
-/** Общие цены 107/112 (раздел «Настройки»). */
+/** Цены 107/112 одной колонки (раздел «Настройки»). */
 public record FuelPriceDto(
+        int pumpNumber,
         BigDecimal discountPrice,   // льготная (107)
         BigDecimal basePrice        // основная (112)
 ) {}

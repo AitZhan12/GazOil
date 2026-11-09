@@ -7,5 +7,8 @@ public record PumpReadingDto(
         int pumpNumber,
         BigDecimal start,
         BigDecimal end,
-        BigDecimal volume   // считается; на вход игнорируется
+        BigDecimal volume,  // считается; на вход игнорируется
+        BigDecimal discountLiters,
+        BigDecimal discountPrice,
+        BigDecimal regularPrice
 ) {}
