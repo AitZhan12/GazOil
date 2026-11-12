@@ -9,6 +9,7 @@ import { Operators } from "./components/Operators";
 import { Settings } from "./components/Settings";
 import { NotFound } from "./components/NotFound";
 import { WaterJournal } from "./components/WaterJournal";
+import { AuditJournal } from "./components/AuditJournal";
 
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       { path: "water", Component: WaterJournal },
       { path: "operators", Component: Operators },
       { path: "settings", Component: Settings },
+      { path: "audit", Component: AuditJournal },
       { path: "*", Component: NotFound },
     ],
   },

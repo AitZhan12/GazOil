@@ -10,6 +10,7 @@ import kz.azs.domain.ShiftBreakdown;
 import kz.azs.repo.OperatorRepository;
 import kz.azs.repo.ShiftRepository;
 import kz.azs.web.NotFoundException;
+import kz.azs.web.ForbiddenException;
 import kz.azs.web.dto.PumpReadingDto;
 import kz.azs.web.dto.ShiftDto;
 import org.springframework.data.domain.PageRequest;
@@ -35,16 +36,18 @@ public class ShiftService {
     private final FuelPriceService fuelPrices;
     private final AzsMapper mapper;
     private final AuthService auth;
+    private final AuditEventService audit;
 
     public ShiftService(ShiftRepository shifts, OperatorRepository operators,
-                        SettingsService settings, FuelPriceService fuelPrices,
-                        AzsMapper mapper, AuthService auth) {
+                         SettingsService settings, FuelPriceService fuelPrices,
+                         AzsMapper mapper, AuthService auth, AuditEventService audit) {
         this.shifts = shifts;
         this.operators = operators;
         this.settings = settings;
         this.fuelPrices = fuelPrices;
         this.mapper = mapper;
         this.auth = auth;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -67,12 +70,15 @@ public class ShiftService {
         Shift shift = new Shift();
         shift.setStation(auth.currentStation());
         apply(shift, dto);
-        validateOpeningReadingsUnlessOverlapping(shift, null);
+        validateOpeningReadings(shift, null, !auth.isAdmin());
         setReadingPrices(shift, fuelPrices.currentByPump(), Map.of());
-        return mapper.toDto(shifts.save(shift), settings.requireConfig());
+        Shift saved = shifts.save(shift);
+        audit.shift("CREATE", saved, describe(saved));
+        return mapper.toDto(saved, settings.requireConfig());
     }
 
     public ShiftDto update(Long id, ShiftDto dto) {
+        if (!auth.isAdmin()) throw new ForbiddenException("Оператор не может изменять сохранённую смену");
         Shift shift = load(id);
         Map<Short, PriceSnapshot> oldPrices = new HashMap<>();
         shift.getReadings().forEach(r -> oldPrices.put(r.getPumpNumber(),
@@ -82,20 +88,24 @@ public class ShiftService {
         shift.getReadings().clear();
         shifts.flush();
         apply(shift, dto);
-        validateOpeningReadingsUnlessOverlapping(shift, id);
+        validateOpeningReadings(shift, id, false);
         setReadingPrices(shift, fuelPrices.currentByPump(), oldPrices);
-        return mapper.toDto(shifts.save(shift), settings.requireConfig());
+        Shift saved = shifts.save(shift);
+        audit.shift("UPDATE", saved, describe(saved));
+        return mapper.toDto(saved, settings.requireConfig());
     }
 
     public void delete(Long id) {
+        auth.requireAdmin();
         Station station = auth.currentStation();
-        if (!shifts.existsByIdAndStationId(id, station.getId())) {
-            throw new NotFoundException("Смена не найдена: " + id);
-        }
-        shifts.deleteById(id);
+        Shift shift = load(id);
+        if (!shift.getStation().getId().equals(station.getId())) throw new NotFoundException("Смена не найдена: " + id);
+        audit.shift("DELETE", shift, "Удалена смена");
+        shifts.delete(shift);
     }
 
     public ShiftDto setCashCollected(Long id, boolean collected, BigDecimal cashReceived, BigDecimal voucherReceived) {
+        auth.requireAdmin();
         Shift shift = load(id);
         if (collected) {
             if (cashReceived == null || cashReceived.signum() < 0) {
@@ -124,12 +134,17 @@ public class ShiftService {
             shift.setVoucherReceived(null);
         }
         shift.setCashCollected(collected);
-        return mapper.toDto(shifts.save(shift), settings.requireConfig());
+        Shift saved = shifts.save(shift);
+        audit.shift(collected ? "CASH_COLLECTED" : "CASH_COLLECTION_REOPENED", saved,
+                collected ? "Отмечена инкассация" : "Снята отметка инкассации");
+        return mapper.toDto(saved, settings.requireConfig());
     }
 
     /** Переносит сырые поля DTO в сущность (операторы, время, колонки, разбивка). */
     private void apply(Shift shift, ShiftDto dto) {
-        shift.setOperator(operatorRef(dto.operatorId(), "Оператор"));
+        shift.setOperator(auth.isAdmin()
+                ? operatorRef(dto.operatorId(), "Оператор")
+                : auth.currentOperatorUser().getOperator());
         shift.setAcceptedBy(dto.receivedById() != null && !dto.receivedById().isBlank()
                 ? operatorRef(dto.receivedById(), "Принявший смену")
                 : null);
@@ -215,6 +230,11 @@ public class ShiftService {
 
     private record PriceSnapshot(BigDecimal discountPrice, BigDecimal basePrice) {}
 
+    private static String describe(Shift shift) {
+        return "Период " + shift.getStartedAt() + " – " + shift.getEndedAt()
+                + ", показаний колонок: " + shift.getReadings().size();
+    }
+
     private Shift load(Long id) {
         var loaded = auth.isAdmin()
                 ? shifts.findWithDetailsByIdAndStationId(id, auth.currentStation().getId())
@@ -229,8 +249,8 @@ public class ShiftService {
      * концом. У пересекающихся по времени смен общего «предыдущего» показания нет,
      * поэтому их сохраняем, как и обещает предупреждение в форме.
      */
-    private void validateOpeningReadingsUnlessOverlapping(Shift shift, Long excludeId) {
-        if (!shifts.findOverlapping(
+    private void validateOpeningReadings(Shift shift, Long excludeId, boolean strict) {
+        if (!strict && !shifts.findOverlapping(
                 shift.getStation().getId(), shift.getStartedAt(), shift.getEndedAt(), excludeId
         ).isEmpty()) {
             return;

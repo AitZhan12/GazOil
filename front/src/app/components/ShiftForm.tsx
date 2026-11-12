@@ -121,7 +121,9 @@ export function ShiftForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
-  const pumpCount = getCurrentUser().pumpCount;
+  const currentUser = getCurrentUser();
+  const isOperator = currentUser.role === 'OPERATOR';
+  const pumpCount = currentUser.pumpCount;
 
   const [operators, setOperators] = useState<Operator[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -192,11 +194,11 @@ export function ShiftForm() {
     if (['full', 'day', 'night'].includes(data.shiftType)) setShiftType(data.shiftType);
     const pumps = Array.isArray(data.pumps) ? data.pumps : [];
     const pump = (n: number) => pumps.find((p: any) => Number(p?.pumpNumber) === n) ?? {};
-    if (pump(1).start != null) setPump1Start(String(pump(1).start));
+    if (!isOperator && pump(1).start != null) setPump1Start(String(pump(1).start));
     if (pump(1).end != null) setPump1End(String(pump(1).end));
-    if (pump(2).start != null) setPump2Start(String(pump(2).start));
+    if (!isOperator && pump(2).start != null) setPump2Start(String(pump(2).start));
     if (pump(2).end != null) setPump2End(String(pump(2).end));
-    if (pump(3).start != null) setPump3Start(String(pump(3).start));
+    if (!isOperator && pump(3).start != null) setPump3Start(String(pump(3).start));
     if (pump(3).end != null) setPump3End(String(pump(3).end));
     if (pump(1).discountLiters != null) setPump1Discount(String(pump(1).discountLiters));
     if (pump(2).discountLiters != null) setPump2Discount(String(pump(2).discountLiters));
@@ -297,6 +299,8 @@ export function ShiftForm() {
            setPump1RegularPrice(String(p1?.basePrice ?? 0));
            setPump2RegularPrice(String(p2?.basePrice ?? 0));
            setPump3RegularPrice(String(p3?.basePrice ?? 0));
+           setDiscountPrice(String(p1?.discountPrice ?? 0));
+           setRegularPrice(String(p1?.basePrice ?? 0));
           const lastReadings = await getLastPumpReadings();
           if (cancelled) return;
           if (lastReadings && lastReadings.length >= pumpCount) {
@@ -306,9 +310,10 @@ export function ShiftForm() {
             if (ends.some(e => e > 0)) setExpectedStarts(ends);
             setPump1Start(ends[0].toString());
             setPump2Start(ends[1].toString());
-            setPump3Start(ends[2].toString());
-          }
-        }
+             setPump3Start(ends[2].toString());
+           }
+           setOperatorId(currentUser.operatorId ?? '');
+         }
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Ошибка загрузки');
       }
@@ -479,7 +484,7 @@ export function ShiftForm() {
   );
 
   return (
-    <div className="w-full">
+    <div className={`w-full ${isOperator ? 'operator-form' : ''}`}>
       {/* Page header */}
       <div className="flex items-center gap-3 mb-5">
         <button
@@ -498,7 +503,7 @@ export function ShiftForm() {
         <label className="ml-auto inline-flex items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700 cursor-pointer hover:bg-blue-100" style={{ fontSize: '12px' }}>
           <Upload className="size-3.5" />
           {aiLoading ? 'Распознаю…' : 'Загрузить отчет'}
-          <input type="file" accept="image/*,application/pdf" className="hidden" disabled={aiLoading}
+          <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" disabled={aiLoading}
             onChange={e => { void handleDocumentUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
         </label>
       </div>
@@ -659,8 +664,8 @@ export function ShiftForm() {
                       <span className="inline-flex items-center justify-center size-6 rounded bg-slate-100 text-slate-700" style={{ fontSize: '12px', fontWeight: 600 }}>{pump.num}</span>
                     </td>
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
-                      <Input type="number" step="0.01" value={pump.start} onChange={e => pump.setStart(e.target.value)}
-                        className={`h-8 min-w-[150px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
+                      <Input type="number" step="0.01" value={pump.start} disabled={isOperator && expectedStarts != null} onChange={e => pump.setStart(e.target.value)}
+                        className={`h-8 min-w-[150px] font-mono border-[#d1d9e6] bg-[#f8fafc] ${pump.err ? 'border-red-400' : ''} ${isOperator && expectedStarts != null ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''}`} style={{ fontSize: '13px' }} placeholder="0.00" />
                     </td>
                     <td className="px-4 py-2 border-r border-[#edf0f5]">
                       <Input type="number" step="0.01" value={pump.end} onChange={e => pump.setEnd(e.target.value)}
@@ -751,6 +756,9 @@ export function ShiftForm() {
               {cashRowInput('voucherLiters', 'Талоны (литр)', voucherLiters, setVoucherLiters, 'л')}
               {/* Товарная карта (литр) — ввод */}
               {cashRowInput('cardLiters', 'Товарная карта (литр)', cardLiters, setCardLiters, 'л')}
+
+              {/* Дисконтный товарный — цена за литр из настроек, не удаляем из формы */}
+              {cashRowValue('Дисконтный товарный (₸/л)', formatCurrency(parseFloat(discountPrice) || 0))}
 
               {/* Скидочные литры вводятся в строках конкретных колонок */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">

@@ -13,6 +13,22 @@
   overflow-x: visible;
 }
 
+.operator-form label,
+.operator-form input,
+.operator-form button,
+.operator-form [role='combobox'] {
+  font-size: 14px;
+}
+
+.operator-form table input {
+  font-size: 15px !important;
+  min-height: 2.25rem;
+}
+
+.operator-form .text-\[11px\] { font-size: 13px; }
+.operator-form .text-\[12px\] { font-size: 14px; }
+.operator-form .text-\[13px\] { font-size: 15px; }
+
 @media (max-width: 1023px) {
   .journal-table-wrap {
     overflow-x: auto;

@@ -67,6 +67,7 @@ export function Root() {
         { path: '/water', label: 'Журнал воды', icon: Droplet },
         { path: '/operators', label: 'Операторы', icon: Users },
         { path: '/settings', label: 'Настройки', icon: SettingsIcon },
+        { path: '/audit', label: 'Журнал действий', icon: FileText },
       ];
 
   return (

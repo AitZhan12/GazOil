@@ -1,4 +1,4 @@
-import { AppSettings, FuelPrice, GasDelivery, Operator, Shift, TankReset, WaterRecord } from '../types';
+import { AppSettings, AuditEvent, FuelPrice, GasDelivery, Operator, Shift, TankReset, WaterRecord } from '../types';
 import { getAuthToken, getCurrentUser, logout } from './auth';
 
 // База API бэка (Spring Boot). Можно переопределить через VITE_API_URL.
@@ -107,6 +107,10 @@ export function setShiftCashCollected(id: string, cashCollected: boolean, cashRe
     method: 'PATCH',
     body: JSON.stringify({ cashCollected, cashReceived, voucherReceived }),
   });
+}
+
+export function getAuditEvents(): Promise<AuditEvent[]> {
+  return http<AuditEvent[]>('/audit-events');
 }
 
 // ---- Журнал воды ----

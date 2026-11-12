@@ -139,3 +139,15 @@ export interface MonthlyOperatorStats {
   cashDebt: number; // непогашенный долг по кассе за отчётный месяц
   voucherDebt: number; // непогашенный долг по талонам за отчётный месяц
 }
+
+export interface AuditEvent {
+  id: number;
+  actorUsername: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  stationName: string;
+  operatorName?: string;
+  details?: string;
+  occurredAt: string;
+}
