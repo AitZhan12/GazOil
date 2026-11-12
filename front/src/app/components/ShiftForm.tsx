@@ -235,12 +235,12 @@ export function ShiftForm() {
       setEndDate(shift.endDate);
       setEndDateText(isoToRu(shift.endDate));
       setEndTime(shift.endTime);
-      setPump1Start(shift.pumps[0]?.start.toString() ?? '');
-      setPump1End(shift.pumps[0]?.end.toString() ?? '');
-      setPump2Start(shift.pumps[1]?.start.toString() ?? '');
-      setPump2End(shift.pumps[1]?.end.toString() ?? '');
-      setPump3Start(shift.pumps[2]?.start.toString() ?? '');
-      setPump3End(shift.pumps[2]?.end.toString() ?? '');
+      setPump1Start(String(shift.pumps[0]?.start ?? ''));
+      setPump1End(String(shift.pumps[0]?.end ?? ''));
+      setPump2Start(String(shift.pumps[1]?.start ?? ''));
+      setPump2End(String(shift.pumps[1]?.end ?? ''));
+      setPump3Start(String(shift.pumps[2]?.start ?? ''));
+      setPump3End(String(shift.pumps[2]?.end ?? ''));
       setPump1Discount(String(shift.pumps[0]?.discountLiters ?? 0));
       setPump2Discount(String(shift.pumps[1]?.discountLiters ?? 0));
       setPump3Discount(String(shift.pumps[2]?.discountLiters ?? 0));
@@ -250,13 +250,13 @@ export function ShiftForm() {
       setPump1RegularPrice(String(shift.pumps[0]?.regularPrice ?? shift.regularPrice ?? 0));
       setPump2RegularPrice(String(shift.pumps[1]?.regularPrice ?? shift.regularPrice ?? 0));
       setPump3RegularPrice(String(shift.pumps[2]?.regularPrice ?? shift.regularPrice ?? 0));
-      setVoucherLiters(shift.voucherLiters.toString());
-      setCardLiters(shift.cardLiters.toString());
-      setDiscountLiters(shift.discountLiters.toString());
-      setDiscountPrice(shift.discountPrice.toString());
-      setRegularPrice(shift.regularPrice.toString());
-      setKaspiQR(shift.kaspiQR.toString());
-      setKaspiTransfer(shift.kaspiTransfer.toString());
+      setVoucherLiters(String(shift.voucherLiters ?? 0));
+      setCardLiters(String(shift.cardLiters ?? 0));
+      setDiscountLiters(String(shift.discountLiters ?? 0));
+      setDiscountPrice(String(shift.discountPrice ?? 0));
+      setRegularPrice(String(shift.regularPrice ?? 0));
+      setKaspiQR(String(shift.kaspiQR ?? 0));
+      setKaspiTransfer(String(shift.kaspiTransfer ?? 0));
       setHalykQR((shift.halykQR ?? 0).toString());
       setHalykTransfer((shift.halykTransfer ?? 0).toString());
     };
@@ -308,9 +308,9 @@ export function ShiftForm() {
             // Контроль непрерывности включаем только при наличии реальной прошлой смены
             // (иначе на самой первой смене был бы ложный «разрыв» против нулей).
             if (ends.some(e => e > 0)) setExpectedStarts(ends);
-            setPump1Start(ends[0].toString());
-            setPump2Start(ends[1].toString());
-             setPump3Start(ends[2].toString());
+            setPump1Start(String(ends[0] ?? 0));
+            setPump2Start(String(ends[1] ?? 0));
+            if (pumpCount >= 3) setPump3Start(String(ends[2] ?? 0));
            }
            setOperatorId(currentUser.operatorId ?? '');
          }
