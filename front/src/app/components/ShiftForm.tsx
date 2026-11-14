@@ -123,6 +123,7 @@ export function ShiftForm() {
   const isEditing = !!id;
   const currentUser = getCurrentUser();
   const isOperator = currentUser.role === 'OPERATOR';
+  const isGnp = currentUser.stationName === 'ГНП';
   const pumpCount = currentUser.pumpCount;
 
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -299,8 +300,10 @@ export function ShiftForm() {
            setPump1RegularPrice(String(p1?.basePrice ?? 0));
            setPump2RegularPrice(String(p2?.basePrice ?? 0));
            setPump3RegularPrice(String(p3?.basePrice ?? 0));
-           setDiscountPrice(String(p1?.discountPrice ?? 0));
-           setRegularPrice(String(p1?.basePrice ?? 0));
+           if (isGnp) {
+             setDiscountPrice(String(p1?.discountPrice ?? 0));
+             setRegularPrice(String(p1?.basePrice ?? 0));
+           }
           const lastReadings = await getLastPumpReadings();
           if (cancelled) return;
           if (lastReadings && lastReadings.length >= pumpCount) {
@@ -757,8 +760,8 @@ export function ShiftForm() {
               {/* Товарная карта (литр) — ввод */}
               {cashRowInput('cardLiters', 'Товарная карта (литр)', cardLiters, setCardLiters, 'л')}
 
-              {/* Дисконтный товарный — цена за литр из настроек, не удаляем из формы */}
-              {cashRowValue('Дисконтный товарный (₸/л)', formatCurrency(parseFloat(discountPrice) || 0))}
+              {/* Дисконтный товарный нужен только в форме ГНП. */}
+              {isGnp && cashRowValue('Дисконтный товарный (₸/л)', formatCurrency(parseFloat(discountPrice) || 0))}
 
               {/* Скидочные литры вводятся в строках конкретных колонок */}
               <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#edf0f5]">
